@@ -9,6 +9,18 @@ The repository is designed to support:
 - multiple research papers,
 - and long-term PhD-level development.
 
+## Table of Contents
+
+- [Research Scope](#research-scope)
+- [Environment Setup](#environment-setup)
+- [Data Policy](#data-policy)
+- [Experiments and Publications](#experiments-and-publications)
+- [Usage and Attribution](#usage-and-attribution)
+- [Citations](#citations)
+  - [Datasets](#datasets)
+  - [Background and Related Work](#background-and-related-work)
+  - [BibTeX](#bibtex)
+
 ## Research Scope
 
 The main research directions covered in this repository include:
