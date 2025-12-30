@@ -1,0 +1,39 @@
+name: rfml-uav
+channels:
+  - conda-forge
+  - defaults
+
+dependencies:
+  # Core Python
+  - python=3.11
+  - pip
+  - ipykernel
+
+  # Scientific stack
+  - numpy
+  - scipy
+  - pandas
+  - pywavelets
+  - scikit-learn
+  - imbalanced-learn
+  - matplotlib
+  - seaborn
+  - h5py
+
+  # Utilities
+  - python-dotenv
+  - tqdm
+  - rarfile
+  - more-itertools
+  - python-graphviz
+  - pydot
+
+  - dnachun::torchviz
+
+  - pip:
+    - hiddenlayer
+    - sigmf
+    - torch
+    - torchvision
+    - --extra-index-url https://download.pytorch.org/whl/cu130
+

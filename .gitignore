@@ -1,0 +1,84 @@
+
+# ===============================
+# Python
+# ===============================
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+*.egg-info/
+.eggs/
+build/
+dist/
+
+# ===============================
+# Conda / virtual environments
+# ===============================
+.env
+.venv
+venv/
+ENV/
+env/
+conda-env/
+*.conda
+*.lock
+
+# ===============================
+# Jupyter
+# ===============================
+.ipynb_checkpoints/
+*.nbconvert.ipynb
+
+# ===============================
+# OS / Editor
+# ===============================
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+
+# ===============================
+# Logs / temp files
+# ===============================
+*.log
+*.tmp
+*.bak
+
+# ===============================
+# Data & RF recordings
+# ===============================
+data/
+datasets/
+recordings/
+captures/
+raw_iq/
+*.sigmf-data
+*.sigmf-meta
+*.npz
+*.npy
+*.h5
+*.mat
+*.wav
+
+# ===============================
+# Generated figures & results
+# ===============================
+outputs/
+results/
+figures/
+plots/
+*.png
+*.jpg
+*.jpeg
+*.svg
+*.pdf
+
+# ===============================
+# Experiments / checkpoints
+# ===============================
+checkpoints/
+runs/
+wandb/
+mlruns/
