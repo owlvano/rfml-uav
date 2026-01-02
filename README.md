@@ -60,6 +60,13 @@ This registers the project source code as an importable Python package, allowing
 python -c "import rfml_uav; print(rfml_uav.__file__)"
 ```
 
+### 4. Configure the `.env` file
+Set the `DATA_PATH` environment variable to the path that will store the data files. Also, in that folder, create a `raw` directory: this is where the unprocessed dataset files will be stored.
+
+### 5. Download the DroneRF dataset
+Download the DroneRF dataset [here](https://data.mendeley.com/datasets/f4c2b4n755/1). Extract all of the archives into a `raw` directory: it will contain all of the `.csv` files at the top level.
+
+
 ## Data Policy
 
 Due to size and licensing constraints, raw RF recordings and derived signal data are not included in this repository.
