@@ -24,4 +24,6 @@ def get_bui_name(bui: str) -> str:
 
 M = 2048  # Total number of frequency bins
 Q = 10  # Number of returning points for spectral continuity
-FS = 80  # Sampling frequency in MHz
+
+FS_MHZ = 80  # Sampling frequency in MHz
+FS_HZ = FS_MHZ * 1e6

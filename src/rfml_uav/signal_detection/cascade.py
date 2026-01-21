@@ -8,8 +8,9 @@ def stage1_score(x):
 
 def aggregate_bursts(scores, min_len=3):
     """
-    scores: list of booleans (stage-1 decisions)
-    returns list of (start_idx, end_idx)
+    Returns bursts as half-open intervals [start, end),
+    where end is exclusive.
+    Burst length = end - start.
     """
     bursts = []
     start = None
@@ -57,7 +58,9 @@ def cascade_detector(
     cyclo_scores = []
     for b0, b1 in bursts:
         cyclo_scores.append(cyclo_on_burst(chunks[b0:b1], fs))
+
     timings["cyclo"] = time.perf_counter() - t0
+    timings["cyclo_invoked"] = len(bursts) > 0
 
     final_score = max(cyclo_scores) if cyclo_scores else 0.0
 
@@ -66,6 +69,9 @@ def cascade_detector(
             "cyclo_invoked": len(bursts) > 0,
             "n_bursts": len(bursts),
             "bursts": bursts,
+            "burst_lengths": [b1 - b0 for b0, b1 in bursts],
+            "energy_scores": s1_scores,
+            "decisions": decisions,
         }
         return final_score, timings, meta
 
