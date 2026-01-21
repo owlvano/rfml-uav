@@ -1,6 +1,6 @@
 import time
 import numpy as np
-from signal_detection.methods import cyclo_detector, energy_detector
+from rfml_uav.signal_detection.methods import cyclo_detector, energy_detector
 
 
 def stage1_score(x):

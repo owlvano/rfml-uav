@@ -1,7 +1,7 @@
 from torch import nn
 
-from nn.cnn import CNN
-from nn.rnn import RNN
+from rfml_uav.nn.cnn import CNN
+from rfml_uav.nn.rnn import RNN
 
 
 def get_model(name: str, input_dim: str, n_classes: int = 4) -> nn.Module:
