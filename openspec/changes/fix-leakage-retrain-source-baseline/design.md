@@ -9,7 +9,7 @@ See proposal.md (Why) for motivation. Current state as observed in code:
   - `get_chunk_ids` is called without `min_packet_length`, so its default of 40 applies (the notebook-level `min_packet_length = chunk_size/2` is unused). Overlapping windows can therefore also arise within one channel.
   - Background (`00000`) uses contiguous non-overlapping windows.
 - **WPD** (`2_Data_Processing_Wavelets.ipynb`): concatenates all `n` per BUI into `Wavelets/{bui}.csv` (L features ‖ H features, 256 columns). Recording identity is lost here.
-- **Balancing** (`3_Data_Balancing.ipynb`): `RandomUnderSampler(sampling_strategy="majority")` over all chunks, written to `balanced/{feature}.npz` with `X, y` only.
+- **Balancing** (`3_Data_Balancing.ipynb`): `RandomUnderSampler` over all chunks, written to `balanced/{feature}.npz` with `X, y` only. The notebook currently says `sampling_strategy="majority"` (with `feature="PSD"`), but `balanced/Wavelets.npz` holds 102500 rows per class, i.e. every class undersampled to Background.
 - **Training** (`paper1-uav-identification/2_Classification_CNN.ipynb`): `StratifiedKFold(shuffle=True)` over balanced chunks. CE loss is computed on the softmax output. "Best fold" = highest test-fold accuracy, which then becomes `checkpoint_wpd_best.pt`, exported by `utils/export_onnx.py` (output `probs`).
 - **CNN tail**: `fc4 → bn7 → prelu4 → softmax`. **RNN tail**: `fc4 → bn4 → softmax`.
 - **Paper 2**: all paper2 notebooks read `chunked/*.npz` via `["arr_0"]` only; none import `rfml_uav.nn`.
@@ -44,7 +44,7 @@ Rule: walk windows in start order and keep a window unless it overlaps the last 
 The WPD notebook writes `Wavelets/features.npz` with `X (N,256) float32`, `bui (N,) str`, `n`, `chunk_idx`, `start`, `is_dup`, computed in the same loop that already writes `{bui}.csv`. Legacy CSVs stay so `3_Data_Balancing` and `onnx_inference.py` keep working.
 
 ### D4. Balancing inside the baseline notebook, carrying metadata
-Background is undersampled in the new notebook using `RandomUnderSampler(...).sample_indices_` to index `X` together with the metadata arrays. The undersampling happens before splitting, mirroring Paper 1, so that the chunk-vs-recording comparison differs only in the splitter.
+Every class is undersampled to the smallest one (`sampling_strategy="not minority"`; Background is the smallest at 102500, reproducing `balanced/Wavelets.npz`) in the new notebook, using `RandomUnderSampler(...).sample_indices_` to index `X` together with the metadata arrays. The undersampling happens before splitting, mirroring Paper 1, so that the chunk-vs-recording comparison differs only in the splitter.
 - *Alternative:* class-weighted CE on unbalanced data. Rejected for this change because it adds a second variable to the leakage comparison.
 
 The undersampling seed equals the run seed.

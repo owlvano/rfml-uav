@@ -49,7 +49,7 @@ Thumbs.db
 # ===============================
 # Data & RF recordings
 # ===============================
-data/
+/data/
 datasets/
 recordings/
 captures/

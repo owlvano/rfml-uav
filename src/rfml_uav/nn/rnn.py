@@ -40,6 +40,6 @@ class RNN(nn.Module):
         
         # Output layer
         x = self.bn4(self.fc4(x))
-        
-        # Softmax
-        return F.softmax(x, dim=1)
+
+        # Logits: softmax only at inference / ONNX export (CrossEntropyLoss applies log-softmax)
+        return x

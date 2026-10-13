@@ -45,6 +45,10 @@ raw/ → (1_Data_Processing_Chunking) → chunked/ (.npz, per UAV BUI + segment)
 chunked/ → (3_Data_Balancing) → balanced/
 ```
 
+`chunked/{bui}{L|H}_{n}.npz` holds chunks under positional key `arr_0` plus `starts` (window start
+sample index, ascending). The Wavelets notebook also writes `Wavelets/features.npz` (`X, bui, n,
+chunk_idx, start, is_dup`): the per-chunk provenance needed for recording-level splits (paper3).
+
 Paper2's cascade detector notebook consumes `chunked/` directly (raw-ish signal chunks), not the
 feature-transformed PSD/STFT/Wavelet directories — those are inputs to paper1's classifiers instead.
 
@@ -77,7 +81,15 @@ nested archive structure into `raw/`.
   instantiating `CNN`/`RNN` directly in notebooks — go through the factory so architecture swaps
   stay a one-line change).
 - **`nn/cnn.py`** / **`nn/rnn.py`** — 1D-CNN and 2-layer-LSTM classifiers over spectral feature
-  vectors, both ending in a 4-class softmax (background/Bebop/AR/Phantom via `get_class_label`).
+  vectors, both returning 4-class **logits** (background/Bebop/AR/Phantom via `get_class_label`);
+  softmax is applied only at inference / in `utils/export_onnx.py` (ONNX output `probs`). Published
+  MoMLeT-2025 numbers come from tag `momlet-2025` (softmax-before-CE, chunk split).
+- **`data/chunking.py`** — `flag_duplicates(starts, chunk_size)`: marks windows overlapping the last
+  kept window of the same recording by >50% (L/H offset near-duplicates).
+- **`eval/splits.py`** — `make_splits(y, groups, mode)`: K outer test folds + val carved from train;
+  `mode="recording"` groups by `f"{bui}_{n}"` (leakage-free), `mode="chunk"` is the legacy paper-1 split.
+- **`eval/metrics.py`** — `classification_report_dict`: accuracy, macro-F1, per-class P/R/F1,
+  confusion matrix, max-softmax confidence split by correct/wrong.
 
 There is no top-level package API exposed in `rfml_uav/__init__.py` (it's empty) — everything is
 imported from its submodule directly, e.g. `from rfml_uav.signal_detection.cascade import cascade_detector`.

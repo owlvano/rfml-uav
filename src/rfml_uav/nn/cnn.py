@@ -100,7 +100,5 @@ class CNN(nn.Module):
         x = self.bn7(x)
         x = self.prelu4(x)
 
-        # Softmax activation
-        x = F.softmax(x, dim=1)
-
+        # Logits: softmax only at inference / ONNX export (CrossEntropyLoss applies log-softmax)
         return x

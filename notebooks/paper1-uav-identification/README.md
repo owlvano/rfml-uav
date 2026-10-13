@@ -37,6 +37,12 @@ To reproduce the experiments described in the paper:
 
 Exact numerical results may vary slightly depending on hardware configuration, random initialization, and dataset partitioning.
 
+**Published numbers correspond to git tag `momlet-2025`.** At that tag the CNN/RNN applied softmax before
+`nn.CrossEntropyLoss`, and the train/test split was by chunk (not by recording). Later commits return
+logits from the models, so re-running these notebooks on newer code gives different numbers. Check out
+`momlet-2025` to reproduce the paper exactly. The deployed checkpoint `checkpoints/v2/checkpoint_wpd_best.*`
+is the MoMLeT-2025 model and is left unchanged.
+
 ## Citation
 
 If you use this code in academic work, please cite the original paper:
