@@ -87,3 +87,4 @@ mlruns/
 # Claude
 # ===============================
 .claude
+.agents/skills/
