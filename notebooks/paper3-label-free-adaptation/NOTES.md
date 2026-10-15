@@ -52,16 +52,24 @@ For the papers:
 - MoMLeT-2025 model (`checkpoints/v2/`) is **kept as is**; it stays the reference and deployed model. The leakage-free alternative is `checkpoints/paper3/source_wpd_cnn.*`.
 - Published Paper 1 state is tagged `momlet-2025` (local tag, not pushed).
 
+## DroneDetect exploration (2026-10-15, `1_DroneDetect_Exploration.ipynb`)
+
+- **Data.** 390 files, 374 GB on external drive (`DRONEDETECT_PATH`).
+  - 5 recordings of 2 s per (subset, drone, mode).
+  - DIS has no hover mode; PHA has no fly mode in CLEAN or BLUE.
+- **No Background class.** There are no drone-free files, so DroneDetect supports identification only.
+- **Two receiver configurations.** AIR/DIS/PHA vs INS/MIN/MP1/MP2 differ in DC offset, RMS (~10×), out-of-band noise floor and file length. This is a shortcut risk.
+- **Shift A is confounded with gain.** CLEAN → BOTH also shifts the noise floor (up to 20 dB for AIR/PHA).
+- **Bursty signals.** Only 15–55% of windows hold a burst, so chunking must keep active windows only.
+
 ## Next session
 
-1. DroneDetect is downloaded; extract it and point to it (new env var or a path under `DATA_PATH`).
-2. Explore:
-   - file inventory, I/Q format and sample rate (expected 60 MS/s, bladeRF);
-   - interference subsets 00/01/10/11, flight modes on/hover/fly;
-   - spectrograms per drone and per interference subset;
-   - **whether drone-free recordings exist** (decides the Background class).
-3. Then open a new OpenSpec change for Phase 1:
-   - DroneDetect loader (`src/rfml_uav/drone_detect/load_data.py` exists);
-   - I/Q → 2-channel WPD;
-   - reuse `flag_duplicates` and `make_splits`.
-   - revisit the CNN logit tail (`bn7 → prelu4`): energy-score AUROC 0.930 < max-softmax 0.957 on the Phase 0 source model (README), so the energy gate may need plain linear logits.
+1. Phase 1 OpenSpec change (`dronedetect-source-baseline`):
+   - memmap loader with inventory parsing (folder = label);
+   - active-window selection by energy (reuse paper2 `energy_detector`);
+   - per-window DC removal and unit-power normalisation;
+   - I ‖ Q 2-channel WPD (256-d);
+   - recording split by file;
+   - CLEAN-only 7-class source CNN, evaluated on BLUE/WIFI/BOTH (RQ1);
+   - **shortcut test**: classifier on noise-only windows must sit near chance;
+   - logit-tail ablation (energy-score AUROC).
