@@ -61,3 +61,61 @@ The gap is small but significant: chunk-split numbers are optimistic by 0.6–1.
 - `checkpoints/paper3/source_wpd_cnn.{pt,onnx}`: recording split, dedup on, seed 0. Fold 1 was chosen by val macro-F1 = 0.9818 (its test acc = 0.9727). It is available as the leakage-free alternative for later phases.
 
 Exported with `python -m rfml_uav.utils.export_onnx --ckpt … --onnx …` (softmax in graph, output `probs`).
+
+## Phase 1 — DroneDetect source baseline and interference sensitivity (RQ1, E1)
+
+Notebooks: `1_DroneDetect_Exploration.ipynb` → `2_DroneDetect_Features.ipynb` → `3_DroneDetect_Source_Baseline.ipynb`.
+
+**Protocol**
+- **Data:** DroneDetect V2 (`DRONEDETECT_PATH`): 7 drones, 60 MS/s complex I/Q, subsets CLEAN / BLUE / WIFI / BOTH, modes ON / HO / FY, 390 recordings of 2 s.
+- **Task:** identification only (7 classes). DroneDetect has no drone-free recordings, so detection is left to the paper-2 cascade upstream.
+- **Windows** (`rfml_uav.drone_detect.dataset.select_windows`): non-overlapping 4000-sample windows (67 µs), scored by DC-removed power.
+  - **Active:** ≥ 6 dB above the recording's 10th-percentile floor.
+  - **Noise-only:** ≤ the floor.
+  - Up to 1000 of each per recording, spread over time: 390k active + 390k noise rows in total.
+- **Features** (`rfml_uav.data.wavelets.iq_wpd_features`): DC removal, unit power, then the DroneRF WPD on I ‖ Q (256-d).
+- **Source model:** trained on CLEAN active rows only, every class undersampled to the smallest.
+  - Split by recording (`.dat` file) with `make_splits(..., "recording")`.
+  - CNN, Adam lr 0.01, 50 epochs; checkpoint = best **validation** macro-F1.
+  - 5 seeds × 5 folds.
+- **Scoring:** each model is scored on its CLEAN test recordings and on **all** BLUE / WIFI / BOTH recordings.
+- **Exclusion:** Phantom 4 FY has no CLEAN recordings, so it is kept out of the table and reported separately.
+
+**Interference table** (`results/paper3/phase1/interference_table.csv`; linear tail, mean ± std over 25 runs; drop = CLEAN − subset macro-F1 of the same model, paired Wilcoxon + 95% bootstrap CI)
+
+| subset | accuracy | macro-F1 | drop [95% CI] | p |
+|---|---|---|---|---|
+| CLEAN | 0.7310 ± 0.0463 | 0.7274 ± 0.0479 | — | — |
+| BLUE | 0.5727 ± 0.0105 | 0.5829 ± 0.0105 | 0.145 [0.127, 0.162] | 6.0e-8 |
+| WIFI | 0.5834 ± 0.0100 | 0.5876 ± 0.0122 | 0.140 [0.123, 0.157] | 6.0e-8 |
+| BOTH | 0.4657 ± 0.0061 | 0.4618 ± 0.0076 | 0.266 [0.248, 0.283] | 6.0e-8 |
+
+(p = 6.0e-8 is the smallest value an exact two-sided Wilcoxon test can give for 25 pairs: every run drops.)
+- **Drop:** interference costs 14–15 pp of macro-F1 with Bluetooth or Wi-Fi alone, and 27 pp with both.
+- **By mode** (`interference_by_mode.csv`): ON is the most robust (CLEAN 0.85 → BOTH 0.67); HO and FY fall to 0.36–0.38 under BOTH.
+- **Unseen Phantom 4 FY:** accuracy 0.58 ± 0.04.
+- **Errors under interference** (`confusion_linear.png`): they collapse onto group-A classes, PHA under BLUE and DIS under WIFI. In CLEAN, most errors are AIR ↔ MP1 ↔ MP2 (DJI OcuSync family).
+
+**Logit tail** (`energy_auroc.csv`; AUROC of separating correct from wrong predictions)
+
+| tail | CLEAN energy / MSP | pooled interference energy / MSP | CLEAN macro-F1 |
+|---|---|---|---|
+| default (`bn7 → prelu4`) | 0.768 / 0.878 | 0.723 / 0.746 | 0.733 |
+| linear | 0.875 / 0.882 | 0.758 / 0.749 | 0.727 |
+
+**Chosen: linear tail.** Its energy score now matches or beats max-softmax under interference, which settles the Phase 0 concern. It costs 0.6 pp of CLEAN macro-F1, within the 1 pp rule.
+
+**Receiver shortcut** (`shortcut_test.csv`, `shortcut_test_inband.csv`, `inband_vs_fullband.csv`)
+- **Full band:** a CNN trained on noise-only CLEAN windows identifies the drone at **0.43 ± 0.05**, against chance 0.14 and the 0.286 flag. It identifies the receiver group (AIR/DIS/PHA vs INS/MIN/MP1/MP2) at **0.98**. **Shortcut flagged.**
+- **In-band mitigation** (only nodes ≤ 14 MHz, 120-d): noise-only accuracy 0.36, group accuracy 0.96, so the shortcut is still flagged. Macro-F1 also dropped on every subset (CLEAN 0.702, BOTH 0.414).
+- **Decision (author, 2026-10-15):** keep the full-band model. Report the shortcut as a DroneDetect property. Adaptive feature normalisation (thesis 3.2) is the intended remedy, and it gets tested against this baseline.
+- **Caveat:** for nearly continuous transmitters, the "noise-only" windows of some drones may still hold weak signal (AIR noise recall 0.71). Part of the 0.43 may therefore be signal, not floor.
+
+**Model:** `checkpoints/paper3/dronedetect_source_wpd_cnn.{pt,onnx}` (7 classes, linear tail, 256-d). Chosen as seed 0, fold 4 by val macro-F1 = 0.790; its test macro-F1 is 0.673. This is the E9 energy model.
+
+**Limitations to state in the paper**
+- No Background class.
+- Shift A is interference **plus** a session/gain change, not interference alone.
+- The 5 recordings per condition likely come from one session, so the recording split is optimistic.
+- The two receiver configurations act as a shortcut.
+- 67 µs windows are much shorter than the 20 ms segments used in prior DroneDetect work. Absolute accuracy is not comparable to those papers, but the drop under interference is.

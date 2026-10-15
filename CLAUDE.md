@@ -29,7 +29,10 @@ python -c "import rfml_uav; print(rfml_uav.__file__)"  # verify install
 `.env` must define `DATA_PATH` (see `.env.sample`), pointing at a directory containing a `raw/`
 subfolder with the extracted DroneRF `.csv` files (dataset: https://data.mendeley.com/datasets/f4c2b4n755/1).
 Every notebook and script reads `DATA_PATH` via `python-dotenv` + `os.getenv("DATA_PATH")` — there is
-no config file, this env var is the single source of truth for data location.
+no config file, this env var is the single source of truth for data location. Paper3 also reads
+`DRONEDETECT_PATH`: the DroneDetect V2 folder (`CLEAN/ BLUE/ WIFI/ BOTH/` of 2-s `.dat` I/Q
+recordings, 374 GB, kept on an external drive). Derived DroneDetect features/results go under
+`DATA_PATH/results/paper3/phase1/`.
 
 All experimentation happens in Jupyter notebooks under `notebooks/`; there are no CLI entry points
 or scripts to "run the pipeline" beyond executing notebooks in order.
@@ -67,6 +70,12 @@ nested archive structure into `raw/`.
   `get_segment_count` (per-BUI segment counts — irregular, e.g. `10111` has 18 not 21),
   `get_input_dim` (expected feature-vector length per representation: PSD=2048, STFT=100,
   Wavelets=256).
+- **`drone_detect/dataset.py`** — DroneDetect V2 (7 drones, 60 MS/s complex I/Q, 2.4375 GHz):
+  `inventory(root)` (one row per recording; folder = label, since `MP1`/`MP2` files are prefixed
+  `MA1`/`MAV`; `rec_id` unique across subsets), `read(path)` (complex64 memmap, actual length),
+  `select_windows` (non-overlapping 4000-sample windows, DC-removed power vs 10th-percentile floor →
+  active / noise-only starts capped per recording, plus uncapped active fraction). No Background class in this dataset.
+  `load_data.py` is the dataset authors' demo script, not an API.
 - **`signal_detection/methods.py`** — the three detector primitives used standalone or as cascade
   stages: `energy_detector` (mean squared amplitude), `wavelet_detector` (DWT coefficient energy),
   `cyclo_detector` (blind spectral correlation function / cyclostationary detector — no prior
@@ -76,16 +85,23 @@ nested archive structure into `raw/`.
   duration-constrained bursts (`min_burst_len`), then `cyclo_detector` runs *only* on burst regions
   (the computational-savings mechanism the paper evaluates). Pass `return_meta=True` to get
   per-burst scores/timings for the cascade selectivity analysis in the notebook.
-- **`nn/models.py`** — `get_model(name, input_dim, n_classes)` factory dispatching to `"CNN"` or
-  `"RNN"`; this is the only intended entry point notebooks use to construct paper1 models (avoid
+- **`nn/models.py`** — `get_model(name, input_dim, n_classes, **kwargs)` factory dispatching to `"CNN"` or
+  `"RNN"` (kwargs reach the model, e.g. `linear_tail=True`); this is the only intended entry point notebooks use to construct paper1 models (avoid
   instantiating `CNN`/`RNN` directly in notebooks — go through the factory so architecture swaps
   stay a one-line change).
 - **`nn/cnn.py`** / **`nn/rnn.py`** — 1D-CNN and 2-layer-LSTM classifiers over spectral feature
   vectors, both returning 4-class **logits** (background/Bebop/AR/Phantom via `get_class_label`);
   softmax is applied only at inference / in `utils/export_onnx.py` (ONNX output `probs`). Published
   MoMLeT-2025 numbers come from tag `momlet-2025` (softmax-before-CE, chunk split).
+  `CNN(..., linear_tail=True)` drops `bn7`/`prelu4` so logits come straight from `fc4`; the default
+  keeps the old architecture and checkpoint compatibility.
+- **`nn/train.py`** — `train_best_val` (Adam + CE, keeps the epoch with best val macro-F1) and
+  `predict_logits`: the shared training loop for paper3 notebooks.
 - **`data/chunking.py`** — `flag_duplicates(starts, chunk_size)`: marks windows overlapping the last
   kept window of the same recording by >50% (L/H offset near-duplicates).
+- **`data/wavelets.py`** — `wpd_features` (dmey level-6 wavelet packet, RMS+STD per node = 128 per real
+  channel; used by the DroneRF Wavelets notebook) and `iq_wpd_features` (complex window → DC removed,
+  unit power, WPD(I) ‖ WPD(Q) = 256).
 - **`eval/splits.py`** — `make_splits(y, groups, mode)`: K outer test folds + val carved from train;
   `mode="recording"` groups by `f"{bui}_{n}"` (leakage-free), `mode="chunk"` is the legacy paper-1 split.
 - **`eval/metrics.py`** — `classification_report_dict`: accuracy, macro-F1, per-class P/R/F1,

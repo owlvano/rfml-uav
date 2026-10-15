@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 class CNN(nn.Module):
-    def __init__(self, input_dim: int, n_classes: int):
+    def __init__(self, input_dim: int, n_classes: int, linear_tail: bool = False):
         super(CNN, self).__init__()
 
         # Convolutional layers with Batch Normalization and ReLU activation
@@ -36,8 +36,11 @@ class CNN(nn.Module):
         self.prelu3 = nn.PReLU(init=0.25)
 
         self.fc4 = nn.Linear(128, n_classes)
-        self.bn7 = nn.BatchNorm1d(n_classes)
-        self.prelu4 = nn.PReLU(init=0.25)
+        # linear_tail: logits straight from fc4 (wider range for the energy score); default keeps old checkpoints loadable
+        self.linear_tail = linear_tail
+        if not linear_tail:
+            self.bn7 = nn.BatchNorm1d(n_classes)
+            self.prelu4 = nn.PReLU(init=0.25)
 
     def _get_conv_output(self, input_dim):
         # Create a dummy tensor to pass through the convolutional layers
@@ -97,8 +100,9 @@ class CNN(nn.Module):
         x = self.prelu3(x)
 
         x = self.fc4(x)
-        x = self.bn7(x)
-        x = self.prelu4(x)
+        if not self.linear_tail:
+            x = self.bn7(x)
+            x = self.prelu4(x)
 
         # Logits: softmax only at inference / ONNX export (CrossEntropyLoss applies log-softmax)
         return x

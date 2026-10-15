@@ -12,21 +12,21 @@ load_dotenv()
 
 data_path = os.getenv("DATA_PATH")
 
-N_CLASSES = 4
-INPUT_DIM = get_input_dim("Wavelets")
-
 parser = argparse.ArgumentParser(description="Export a WPD-CNN checkpoint to ONNX (softmax applied in-graph)")
 parser.add_argument("--ckpt", default=os.path.join(data_path, "checkpoints/v2/checkpoint_wpd_best.pt"))
 parser.add_argument("--onnx", default=os.path.join(data_path, "checkpoints/v2/checkpoint_wpd_best.onnx"))
+parser.add_argument("--n-classes", type=int, default=4)
+parser.add_argument("--input-dim", type=int, default=get_input_dim("Wavelets"))
+parser.add_argument("--linear-tail", action="store_true")
 args = parser.parse_args()
 
-model = get_model("CNN", input_dim=INPUT_DIM, n_classes=N_CLASSES)
+model = get_model("CNN", input_dim=args.input_dim, n_classes=args.n_classes, linear_tail=args.linear_tail)
 model.load_state_dict(torch.load(args.ckpt, map_location="cpu"))
 # models return logits; deployed artifacts keep returning probabilities under the name "probs"
 model = nn.Sequential(model, nn.Softmax(dim=1))
 model.eval()
 
-dummy_input = torch.randn(1, 1, INPUT_DIM)
+dummy_input = torch.randn(1, 1, args.input_dim)
 
 torch.onnx.export(
     model,

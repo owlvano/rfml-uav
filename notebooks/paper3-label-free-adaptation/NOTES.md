@@ -62,14 +62,18 @@ For the papers:
 - **Shift A is confounded with gain.** CLEAN → BOTH also shifts the noise floor (up to 20 dB for AIR/PHA).
 - **Bursty signals.** Only 15–55% of windows hold a burst, so chunking must keep active windows only.
 
+## Phase 1 outcome (2026-10-15)
+
+See README "Phase 1".
+- **Interference cost:** macro-F1 drops 14–15 pp under BT or Wi-Fi and 27 pp under both, so there is room for adaptation.
+- **Logit tail:** linear, which fixes the Phase 0 energy-score issue.
+- **Receiver shortcut:** confirmed (noise-only accuracy 0.43, group accuracy 0.98). In-band cropping doesn't remove it.
+- **Errors under interference** flow into group-A classes, which suggests the raised noise floor is read as "group A". Adaptive normalisation should target exactly this.
+
 ## Next session
 
-1. Phase 1 OpenSpec change (`dronedetect-source-baseline`):
-   - memmap loader with inventory parsing (folder = label);
-   - active-window selection by energy (reuse paper2 `energy_detector`);
-   - per-window DC removal and unit-power normalisation;
-   - I ‖ Q 2-channel WPD (256-d);
-   - recording split by file;
-   - CLEAN-only 7-class source CNN, evaluated on BLUE/WIFI/BOTH (RQ1);
-   - **shortcut test**: classifier on noise-only windows must sit near chance;
-   - logit-tail ablation (energy-score AUROC).
+1. Archive `dronedetect-source-baseline` after review.
+2. Next change: shift B, a receiver-impairment simulator (4 impairments × 3 severities: AWGN, gain/AGC drift, frequency-response tilt, ADC bits + clipping) on cached features from both datasets (E2).
+   - Plan go/no-go: if source-only loses < 3 pp, raise the severity.
+3. Then the adaptation baselines (AdaBN, TENT, naive pseudo-labelling) against the DroneDetect source model (E3).
+4. Hardware check for the Nov 15 go/no-go: order or borrow the Jetson and power meter.
