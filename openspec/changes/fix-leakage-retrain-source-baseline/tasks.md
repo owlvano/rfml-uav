@@ -47,6 +47,12 @@
 - [x] 5.4 Export the selected source model (seed 0, recording mode, dedup on, best val macro-F1 fold) to `checkpoints/paper3/source_wpd_cnn.{pt,onnx}` via `export_onnx.py --ckpt/--onnx`; verify `onnx_inference.py --onnx checkpoints/paper3/source_wpd_cnn.onnx --feature wpd` runs
 - [x] 5.5 Add `notebooks/paper3-label-free-adaptation/README.md` stating the Phase 0 protocol, the headline numbers from 5.3 and the gate outcome (whether the recording split drops accuracy substantially → new source model); verify the README numbers match the CSV
 
+## 6. Energies alignment
+
+- [x] 6.1 Save test-set logits (not only probs) for recording mode, dedup on, all seeds × folds: re-score the 25 saved best-val checkpoints in `checkpoints/paper3/phase0/recording_dedup_*.pt` (no retraining; phase0 result files hold probs only). Render energy-score `-logsumexp(logits)` histograms (correct vs wrong) to `results/paper3/phase0/energy_score_histograms.png` and write energy vs max-softmax AUROC (mean ± std) to `energy_auroc.csv`; verify both files exist and the README states whether energy ≥ max-softmax
+- [x] 6.2 Add per-dedup paired Wilcoxon p-value and 95% bootstrap CI of mean difference (chunk − recording) for accuracy and macro-F1 to `results/paper3/phase0/leakage_stats.csv` (D10); verify 2 rows and the README quotes them
+- [x] 6.3 Retitle `notebooks/paper3-label-free-adaptation/README.md` to the Energies working title; verify heading changed
+
 ## Workflow follow-up
 
 - Hand the 5.3 leakage table to rfml-mobile-app `classification-accuracy-validation` (JMM).

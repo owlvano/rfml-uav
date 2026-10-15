@@ -1,6 +1,6 @@
-# Paper 3 — RF-Based UAV Identification with Label-Free Adaptation
+# Paper 3 — Energy-Efficient Identification of UAVs from RF Emissions with Label-Free Adaptation
 
-Dissertation chapter 3. Notebooks run in numeric order.
+Dissertation chapter 3. Target: MDPI *Energies*, section F4 (Critical Energy Infrastructure). Notebooks run in numeric order.
 
 ## Phase 0 — DroneRF source baseline (`0_Source_Baseline.ipynb`)
 
@@ -41,6 +41,20 @@ Background F1 is ≥ 0.986 and Phantom F1 ≥ 0.9998 in every cell. The errors a
 - Removing near-duplicates barely matters.
 
 So leakage inflates the inherited number only slightly. The claim is safe to keep, as long as it is reported with the recording split.
+
+**Significance** (`leakage_stats.csv`; chunk − recording, paired by (seed, fold), 25 pairs, Wilcoxon + 95% bootstrap CI)
+
+| dedup | Δ accuracy [95% CI] | p | Δ macro-F1 [95% CI] | p |
+|---|---|---|---|---|
+| off | 0.0100 [0.0074, 0.0128] | 1.2e-7 | 0.0101 [0.0073, 0.0130] | 1.2e-7 |
+| on | 0.0060 [0.0034, 0.0087] | 3.8e-4 | 0.0061 [0.0034, 0.0088] | 4.3e-4 |
+
+The gap is small but significant: chunk-split numbers are optimistic by 0.6–1.0 pp.
+
+**Energy-score separability** (recording, dedup on, 25 saved checkpoints re-scored; `energy_auroc.csv`, `energy_score_histograms.png`)
+- AUROC for separating correct from wrong predictions: energy 0.930 ± 0.039, max-softmax 0.957 ± 0.027.
+- **Energy is less separable than max-softmax.** By the design rule, revisit the `bn7 → prelu4` logit tail in Phase 1 before building the open-set gate on the energy score.
+- The histogram still shows a clear shift (correct ≈ −5, wrong ≈ −2). Correct-vs-wrong is only a proxy: the gate's real test is known vs unknown drones (E5-lite).
 
 **Models**
 - `checkpoints/v2/checkpoint_wpd_best.*`: the MoMLeT-2025 model. **Kept as is** and still the deployed / reference model.

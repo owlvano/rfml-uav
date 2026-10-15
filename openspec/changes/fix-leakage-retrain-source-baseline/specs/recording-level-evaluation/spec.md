@@ -44,3 +44,14 @@ The baseline report SHALL give, per split mode and dedup setting, mean ± std ov
 #### Scenario: Leakage table
 - **WHEN** the baseline notebook completes with 5 seeds
 - **THEN** a table compares `chunk` vs `recording` mode (with and without dedup), and each cell shows mean ± std over 5 seeds × 5 folds
+
+#### Scenario: Significance of the split effect
+- **WHEN** the leakage table is rendered
+- **THEN** for each dedup setting it reports the paired Wilcoxon p-value and the 95% bootstrap CI of the mean accuracy and macro-F1 difference (chunk − recording) over matched (seed, fold) runs
+
+### Requirement: Energy-score separability report
+The baseline report SHALL give, for the exported recording-mode source model's configuration, histograms of the energy score `-logsumexp(logits)` split into correct and incorrect predictions, and the AUROC of both the energy score and max-softmax confidence for separating correct from incorrect predictions.
+
+#### Scenario: Logit range check
+- **WHEN** the baseline notebook completes
+- **THEN** it reports energy-score and max-softmax AUROC side by side, and states whether the energy score is at least as separable as max-softmax

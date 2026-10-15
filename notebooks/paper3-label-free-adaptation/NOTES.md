@@ -64,3 +64,4 @@ For the papers:
    - DroneDetect loader (`src/rfml_uav/drone_detect/load_data.py` exists);
    - I/Q → 2-channel WPD;
    - reuse `flag_duplicates` and `make_splits`.
+   - revisit the CNN logit tail (`bn7 → prelu4`): energy-score AUROC 0.930 < max-softmax 0.957 on the Phase 0 source model (README), so the energy gate may need plain linear logits.

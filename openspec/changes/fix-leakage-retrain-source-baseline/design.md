@@ -85,13 +85,16 @@ Aggregation (mean ± std over seed × fold) stays in the notebook with pandas `g
 - Per-run predictions (`y_true, y_pred, probs, test groups`) go to `results/paper3/phase0/{mode}_{dedup}_s{seed}_f{fold}.npz`, so tables and figures re-render without retraining.
 - The notebook skips runs whose file already exists (resume).
 
+### D10. Statistics
+Chunk vs recording mode is compared per dedup setting with a paired Wilcoxon signed-rank test (`scipy.stats.wilcoxon`) over the 25 matched (seed, fold) runs, plus a 95% bootstrap CI of the mean difference (10,000 resamples of the paired differences). Computed from the saved D9 files; no retraining. Pairing is by (seed, fold) index only: chunk and recording folds contain different test samples.
+
 ## Risks / Trade-offs
 
 - [Recording-split accuracy drops sharply] → Expected and reportable. Per the plan's gate, the new model is the chapter-3 source model, and the drop is stated openly. JMM uses the same table.
 - [Phantom has only 21 recordings, one BUI] → Each test fold still gets ~4 Phantom recordings, which is enough for stratification. The splitter asserts that every class appears in every test fold.
 - [Undersampling before splitting changes per-recording chunk counts] → The same balanced set feeds both modes, so the comparison stays fair. The design notes this as a limitation.
 - [Paper 1 notebook semantics change (CE on logits)] → Tag the pre-change commit `momlet-2025`, and note it in the paper1 README.
-- [PReLU/BN on logits may limit logit range for the energy score] → Accepted for Phase 0. Check the energy-score spread in this notebook's confidence plots before Phase 6.
+- [PReLU/BN on logits may limit logit range for the energy score] → Checked in Phase 0 (task 6.1), since the open-set gate is a committed deliverable of the Energies submission. If the energy-score AUROC (correct vs wrong) is below the max-softmax AUROC, revisit the `bn7`/`prelu4` tail in Phase 1.
 - [Regenerating `chunked/` overwrites existing files] → `arr_0` stays identical by construction. Verify by checksum on a few recordings before and after.
 
 ## Migration Plan

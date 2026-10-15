@@ -1,5 +1,23 @@
 schema: spec-driven
 
+context: |
+  Paper 3 targets MDPI Energies (section F4, Critical Energy Infrastructure); planned submission
+  2027-01-20, hard limit 2027-01-31 (APC discount). Energy is a constraint, not the thesis focus:
+  energy results go to thesis 5.4, adaptivity to chapter 3.
+  Objective = macro-F1 AND node energy (J/segment, J/update, node lifetime, avoided false alarms).
+  In scope: DroneDetect shift A (interference 00/01/10/11), shift B (4 receiver impairments x 3
+  severities), E5-lite open-set (leave-1-class-out, gate on/off), event-triggered head-only updates,
+  E9 energy on RPi 5 + Jetson, light ablations (W, tau, update scope, trigger).
+  Out of scope: full open-set study, mobile demo (E7), real cross-receiver (E8), FPGA, full ablation grid.
+  Never overwrite the MoMLeT-2025 model in checkpoints/v2/; the paper3 source model is checkpoints/paper3/.
+  All splits are by recording. Experiments report mean ± std over 5 seeds, 95% bootstrap CI and
+  Wilcoxon vs the best baseline.
+
+rules:
+  proposal:
+    - State which research question (RQ1-RQ4) and experiment (E1-E9) the change serves
+    - State whether results feed thesis chapter 3 or section 5.4
+
 # Project context (optional)
 # Add only constraints that should guide OpenSpec artifacts and workflows.
 # Include constraints an agent cannot infer by reading the code.

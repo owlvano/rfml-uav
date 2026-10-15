@@ -2,7 +2,7 @@
 
 ## Why
 
-Paper 3 (dissertation chapter 3, label-free adaptation) needs a trustworthy DroneRF source model, but the current pipeline cannot provide one. The inherited 97% accuracy (MoMLeT-2025) comes from a split by chunk. Chunks from one recording land in both train and test, near-duplicate L/H windows add more leakage, and the "best" checkpoint is chosen on test accuracy. The CNN also applies softmax before `nn.CrossEntropyLoss`, which weakens gradients and hides the logits that the paper's energy-score open-set gate needs. Every later Paper 3 phase (DroneDetect, impairments, TTA baselines, OG-TCST) inherits these defects, so they must be fixed first. The "chunk split vs recording split" table also serves as `classification-accuracy-validation` for the JMM paper (rfml-mobile-app).
+Paper 3 (dissertation chapter 3; MDPI *Energies*, energy-efficient RF-based UAV identification with label-free adaptation for critical energy infrastructure) needs a trustworthy DroneRF source model for energy-constrained edge monitoring nodes, but the current pipeline cannot provide one. The inherited 97% accuracy (MoMLeT-2025) comes from a split by chunk. Chunks from one recording land in both train and test, near-duplicate L/H windows add more leakage, and the "best" checkpoint is chosen on test accuracy. The CNN also applies softmax before `nn.CrossEntropyLoss`, which weakens gradients and hides the logits that the paper's energy-score open-set gate needs. Every later Paper 3 phase (DroneDetect, impairments, TTA baselines, OG-TCST) inherits these defects, so they must be fixed first. The "chunk split vs recording split" table also serves as `classification-accuracy-validation` for the JMM paper (rfml-mobile-app).
 
 ## What Changes
 
