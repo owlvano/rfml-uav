@@ -105,6 +105,9 @@ nested archive structure into `raw/`.
 - **`data/impairments.py`** — `impair(x, kind, severity, rng)`: shift-B receiver impairments (`awgn`,
   `gain`, `tilt`, `adc`) × severities 1–3 (+4 escalation) on real or complex windows; severity 0 =
   identity; seed `default_rng([seed, KIND_ID[kind], severity, row_id])` for per-row determinism.
+- **`adapt/baselines.py`** — label-free adaptation baselines `adabn`, `tent`, `pseudo_label`:
+  `(model, X, **hp) -> (adapted copy, info)`; no label argument, source untouched, `info` = forward/backward
+  passes per window + updated-param count (E3; reused by the OG-TCST stream harness).
 - **`eval/splits.py`** — `make_splits(y, groups, mode)`: K outer test folds + val carved from train;
   `mode="recording"` groups by `f"{bui}_{n}"` (leakage-free), `mode="chunk"` is the legacy paper-1 split.
 - **`eval/metrics.py`** — `classification_report_dict`: accuracy, macro-F1, per-class P/R/F1,

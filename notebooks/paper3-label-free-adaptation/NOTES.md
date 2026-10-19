@@ -80,13 +80,27 @@ See README "Phase 2".
 - **Normalisation is a free defence against gain.** The unit-power I/Q features ignore a constant gain change. The un-normalised DroneRF WPD loses up to 46 pp. This is a Methods point. It also suggests re-normalising DroneRF features if DroneRF stays in the adaptation experiments.
 - **The energy score doesn't clearly beat max-softmax under shift B.** It wins only at strong AWGN. The open-set gate (E5-lite) should report both scores.
 
+## Phase 3 outcome (2026-10-19)
+
+See README "Phase 3".
+- **Standard label-free adaptation fixes AWGN, not interference.**
+  - AWGN: every baseline recovers 33–50% of the drop (TENT best). This confirms the prediction from the shortcut finding.
+  - Shift A: AdaBN and PL are ≈ 0, and TENT is harmful (−1.4 to −2.5 pp).
+  - Interference is a per-window mixture (bursts), not a global statistics shift.
+- **Implication for OG-TCST.** Normalisation adaptation alone will match the baselines on AWGN at best. The novelty must come from what the baselines can't do:
+  - per-window or temporal handling of interference bursts (temporal consistency, gating out interfered windows);
+  - not becoming over-confident: TENT drops energy AUROC under interference, so a gate must not be fed TENT-adapted logits.
+- **The bar per target is in `e3_table.csv`** (`best_baseline`). For shift A it is effectively source-only or AdaBN (≈ 0.46–0.59). For AWGN it is TENT (0.640 / 0.573).
+- **Cost.** AdaBN is about 1 forward pass per window with no backward pass. TENT and PL each need about one backward pass per window. An event-triggered, head-only update (903 parameters) should undercut both.
+- **Protocol issue.** One recording per class in the shift-B adapt half biases BatchNorm methods by about 2–3 pp. If shift-B comparisons matter for OG-TCST, consider adapting on impaired *train* recordings (unlabeled, but the model trained on their clean versions). That needs an author decision.
+- **Bug fixed during apply.** The AdaBN statistics pass first walked recording-sorted rows in order, which underestimated the variance (clean-data loss −4.9 pp). It now shuffles, and the self-check tests the variance.
+
 ## Next session
 
-1. E3 (new OpenSpec change): AdaBN / TENT / naive pseudo-labelling on the frozen DroneDetect models. Decisions (author, 2026-10-19):
-   - **Targets:** shift A (BLUE / WIFI / BOTH) and shift B (awgn 2–3, gain 3, adc 3, tilt 4).
-   - **Split:** adapt on half the target recordings, test on the other half, split by recording.
-   - **DroneRF:** dropped from E3, appendix at most.
-2. **Hardware (none yet, 2026-10-19).**
+1. Review and archive `adaptation-baselines` (E3).
+2. Decide on the shift-B adapt pool: keep the 7 test recordings, or switch to impaired train recordings.
+3. OG-TCST design (new OpenSpec change), aimed at shift A, where every baseline fails. Re-run the baselines in the stream harness.
+4. **Hardware (none yet, 2026-10-19).**
    - Order an RPi 5 and a USB-C power meter with logging (or an INA226) this week. This is the main E9 platform.
    - CloudJetson (AGX Orin 64GB, ~$1.70/h) is a secondary data point, if they confirm `tegrastats` per-rail power and sudo for `nvpmodel` / `jetson_clocks`. Report it as AGX Orin, not as an Orin Nano proxy.
    - Hardware-independent numbers in any case: MACs per segment, parameters updated per event, update rate.

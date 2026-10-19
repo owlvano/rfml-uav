@@ -181,3 +181,66 @@ Notebook: `4_Receiver_Impairment_Shift.ipynb`. Results in `results/paper3/phase2
 - One fixed impairment draw: the CI covers model variance, not draw variance.
 - ADC full scale follows the window RMS (per-window AGC), so ADC and gain are measured separately, not jointly.
 - CFO, IQ imbalance and slow gain drift across windows are not modelled.
+
+## Phase 3 — Adaptation baselines (E3)
+
+Notebook: `5_Adaptation_Baselines.ipynb`. Results in `results/paper3/phase3/`.
+
+**Protocol**
+- **Methods** (`rfml_uav.adapt.baselines`), applied to the 25 frozen Phase 1 models (linear tail):
+  - AdaBN: BatchNorm statistics re-estimated on the target;
+  - TENT: entropy minimisation on the BatchNorm affine parameters, then the statistics re-estimated;
+  - naive pseudo-labelling (PL): fine-tune all parameters on source predictions with max-softmax ≥ τ.
+- **Offline:** each method adapts once on the unlabeled *adapt* half and is scored on the disjoint *test* half.
+- **Split** by recording, per drone class: half of each class's recordings go to adapt, the rest to test.
+  - Shift A (BLUE / WIFI / BOTH, no Phantom FY): 45 adapt / 50 test recordings.
+  - Shift B: only the model's own CLEAN test recordings, impaired: 7 adapt (1 per class) / 12 test.
+- **Hyperparameters:** tuned with labels on dev shifts that are not targets (awgn 1, gain 2, adc 2, tilt 3, seed-0 models), then frozen (`selected_hparams.json`):
+  - TENT: lr 1e-2, 1 epoch;
+  - PL: τ 0.8, lr 1e-4, 1 epoch.
+
+  The dev gains are small (≤ 0.6 pp), so the selection favours light updates.
+
+**E3 table** (`e3_table.csv`; macro-F1 mean ± std over 25 runs; gain vs source-only in pp [95% CI]; recovered = gain / (clean − source); **bold** = best baseline)
+
+| target | source-only | AdaBN | TENT | PL |
+|---|---|---|---|---|
+| BLUE | **0.588 ± 0.022** | −0.4 [−0.8, 0.0] | −1.4 [−2.0, −0.8] | −0.6 [−0.8, −0.3] |
+| WIFI | 0.585 ± 0.022 | **+0.1 [−0.3, 0.4]** | −2.5 [−3.3, −1.6] | −0.3 [−0.6, 0.0] |
+| BOTH | 0.457 ± 0.016 | **+0.2 [−0.1, 0.5]** | −1.7 [−2.3, −1.1] | −0.2 [−0.4, 0.1] |
+| awgn 2 | 0.550 ± 0.081 | +7.4 [4.1, 10.5], 33% | **+8.9 [5.9, 11.8], 44%** | +7.6 [5.0, 10.0], 38% |
+| awgn 3 | 0.409 ± 0.069 | +13.7 [10.2, 17.2], 42% | **+16.5 [13.0, 20.0], 50%** | +13.5 [11.1, 16.0], 43% |
+| gain 3 | 0.669 ± 0.076 | +0.4 [−1.3, 2.0] | −0.8 [−2.8, 1.2] | **+0.5 [−1.0, 2.0]** |
+| adc 3 | **0.685 ± 0.074** | −1.0 [−2.4, 0.2] | −0.5 [−1.9, 0.8] | −0.3 [−1.3, 0.6] |
+| tilt 4 | 0.657 ± 0.052 | −0.2 [−1.8, 1.5] | +0.5 [−1.2, 2.2] | **+0.7 [−0.4, 1.8]** |
+
+- **Interference (shift A): no baseline helps.** AdaBN and PL stay within ±0.6 pp; TENT loses 1.4–2.5 pp. Interference changes only some windows (bursts), not the statistics of all of them, so re-normalising every window doesn't address it.
+- **AWGN: every baseline recovers 33–50% of the drop.** TENT is best (+16.5 pp at 5 dB). This matches the Phase 2 shortcut finding: re-normalising fixes the noise-filled out-of-band nodes. Much of the gain is on DIS, INS and MP1 (`e3_per_class.csv`).
+- **Mild impairments (gain 3, adc 3, tilt 4): no significant change.** Their drops are only 3–7 pp, so recovered fractions are noisy (2–5 runs per target excluded, where clean − source < 1 pp).
+- **Separability after adaptation** (`e3_auroc.csv`):
+  - energy beats max-softmax in most cells;
+  - AdaBN raises energy AUROC on WIFI (0.717 → 0.770) and AWGN 3 (0.709 → 0.767);
+  - TENT lowers it under interference (BLUE 0.831 → 0.709): entropy minimisation makes wrong predictions confident.
+
+**Cost** (`e3_cost.csv`; per adapt window; GPU wall time is a proxy, not node energy)
+
+| method | forward | backward | parameters updated | median wall time per adaptation |
+|---|---|---|---|---|
+| AdaBN | 1.00 | 0 | 0 | 0.013 s |
+| TENT | 1.99 | 0.99 | 2,016 | 0.044 s |
+| PL | 1.73 | 0.73 | 409,626 | 0.041 s |
+
+**Sanity check: AdaBN on clean data** (`adabn_clean_diagnosis.csv`, seed-0 models; change in macro-F1 by where the statistics come from)
+
+| statistics from | change |
+|---|---|
+| clean train set (~60 recordings) | +0.5 pp |
+| all 19 clean test recordings | −0.1 pp |
+| shift-B adapt half (7 recordings, 1 per class) | −3.5 pp |
+
+Over 25 runs, AdaBN on the clean adapt half loses 2.3 pp [0.8, 4.0]. The implementation is sound; statistics from one recording per class are too recording-specific. **Shift-B results for AdaBN and TENT are therefore biased down by about 2–3 pp.**
+
+**Limitations to state in the paper**
+- The shift-B adapt sets are small (7 recordings), which biases BatchNorm-based baselines (above).
+- The dev shifts are mild, so the tuning signal is weak and favours light updates. OG-TCST will be tuned with the same grid and cells.
+- Offline regime only. Streaming versions come with OG-TCST.
