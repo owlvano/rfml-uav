@@ -102,10 +102,15 @@ nested archive structure into `raw/`.
 - **`data/wavelets.py`** — `wpd_features` (dmey level-6 wavelet packet, RMS+STD per node = 128 per real
   channel; used by the DroneRF Wavelets notebook) and `iq_wpd_features` (complex window → DC removed,
   unit power, WPD(I) ‖ WPD(Q) = 256).
+- **`data/impairments.py`** — `impair(x, kind, severity, rng)`: shift-B receiver impairments (`awgn`,
+  `gain`, `tilt`, `adc`) × severities 1–3 (+4 escalation) on real or complex windows; severity 0 =
+  identity; seed `default_rng([seed, KIND_ID[kind], severity, row_id])` for per-row determinism.
 - **`eval/splits.py`** — `make_splits(y, groups, mode)`: K outer test folds + val carved from train;
   `mode="recording"` groups by `f"{bui}_{n}"` (leakage-free), `mode="chunk"` is the legacy paper-1 split.
 - **`eval/metrics.py`** — `classification_report_dict`: accuracy, macro-F1, per-class P/R/F1,
   confusion matrix, max-softmax confidence split by correct/wrong.
+- **`eval/stats.py`** — `paired_test(a, b)`: paired mean diff over runs, 95% bootstrap CI, Wilcoxon p
+  (the significance test every paper3 table reports).
 
 There is no top-level package API exposed in `rfml_uav/__init__.py` (it's empty) — everything is
 imported from its submodule directly, e.g. `from rfml_uav.signal_detection.cascade import cascade_detector`.

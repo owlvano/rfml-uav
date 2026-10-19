@@ -119,3 +119,53 @@ Notebooks: `1_DroneDetect_Exploration.ipynb` → `2_DroneDetect_Features.ipynb` 
 - The 5 recordings per condition likely come from one session, so the recording split is optimistic.
 - The two receiver configurations act as a shortcut.
 - 67 µs windows are much shorter than the 20 ms segments used in prior DroneDetect work. Absolute accuracy is not comparable to those papers, but the drop under interference is.
+
+## Phase 2 — Receiver-impairment shift (shift B, E2)
+
+Notebook: `4_Receiver_Impairment_Shift.ipynb`. Results in `results/paper3/phase2/`.
+
+**Protocol**
+- **Impairments** (`rfml_uav.data.impairments.impair`): applied per raw window, before the unchanged WPD features. Each random draw is seeded by (impairment, severity, row), so results don't depend on processing order or the number of workers. Severity 0 reproduces the cached features (checked).
+
+  | impairment | severity 1 | severity 2 | severity 3 | severity 4 (escalation) |
+  |---|---|---|---|---|
+  | awgn: SNR vs window power | 20 dB | 10 dB | 5 dB | 0 dB |
+  | gain: ±offset, then ±step at a random point in the middle half of the window | 3 dB | 6 dB | 12 dB | 20 dB |
+  | tilt: linear-in-dB spectral slope, edge to edge | 3 dB | 6 dB | 12 dB | 20 dB |
+  | adc: bits / clip at k × component RMS | 10 / 4 | 8 / 3 | 6 / 2 | 4 / 1.5 |
+
+- **Rows:** all 95,000 CLEAN active DroneDetect windows, and all 164,264 non-duplicate DroneRF windows (L and H impaired independently).
+- **Models (no retraining):**
+  - the 25 Phase 1 DroneDetect models (linear tail);
+  - the 25 Phase 0 DroneRF `recording_dedup` models.
+
+  Each model is scored on the impaired version of its own test rows. Clean macro-F1 is reproduced for all 50 runs.
+- **Statistics:** drop = clean − impaired macro-F1 of the same model, paired over 25 (seed, fold) runs, with a Wilcoxon test and 95% bootstrap CI (`rfml_uav.eval.stats.paired_test`).
+- **Escalation:** a severity-3 drop below 3 pp on DroneDetect adds severity 4 for both datasets. Only `tilt` qualified.
+
+**Shift-B table** (`shift_b_table.csv`; macro-F1 mean ± std over 25 runs; drop in pp [95% CI]; every drop p < 0.01 except DroneRF adc 1, p = 0.17)
+
+| impairment | DroneDetect s1 | s2 | s3 | DroneRF s1 | s2 | s3 |
+|---|---|---|---|---|---|---|
+| clean | 0.727 ± 0.048 | | | 0.965 ± 0.006 | | |
+| awgn | −6.2 [4.6, 7.8] | −18.5 [16.1, 20.8] | −31.8 [28.8, 34.8] | −0.3 [0.2, 0.4] | −2.2 [1.7, 2.7] | −7.9 [6.4, 9.6] |
+| gain | −0.7 [0.4, 1.1] | −2.2 [1.5, 2.9] | −5.5 [4.6, 6.6] | −4.2 [3.4, 5.2] | −18.7 [17.7, 19.8] | −39.8 [38.8, 40.7] |
+| tilt | −0.3 [0.1, 0.5] | −0.9 [0.3, 1.5] | −2.8 [1.8, 3.8] | −0.1 [0.1, 0.1] | −0.4 [0.3, 0.5] | −1.4 [1.0, 1.7] |
+| adc | −0.1 [0.1, 0.2] | −0.5 [0.3, 0.8] | −4.1 [2.9, 5.3] | 0.0 [0.0, 0.0] | 0.0 [0.0, 0.0] | −0.3 [0.2, 0.3] |
+| tilt s4 (escalation) | | | −6.9 [5.5, 8.3] | | | −4.6 [3.7, 5.5] |
+
+- **DroneDetect: AWGN dominates.** Even 20 dB SNR costs 6 pp. At 10 dB, the 18.5 pp loss exceeds Bluetooth or Wi-Fi interference (14–15 pp, Phase 1). At 5 dB, the 31.8 pp loss exceeds BOTH (26.6 pp). The worst-hit classes are INS, MP1 and PHA (`shift_b_per_class.csv`). Gain, tilt and ADC cost ≤ 6 pp even at severity 3.
+- **DroneRF: gain dominates.** These WPD features are not power-normalised.
+  - A constant offset alone costs 2.8 / 13.4 / 46.4 pp at 3 / 6 / 12 dB (`gain_invariance.csv`).
+  - On DroneDetect, the same offset leaves the features unchanged (checked on 1,000 windows).
+  - ADC barely matters on DroneRF, because its samples are already small integers.
+- **Energy-score separability** (`shift_b_auroc.csv`; AUROC of separating correct from wrong predictions on DroneDetect):
+  - it degrades with severity, mostly under AWGN: energy 0.875 (clean) → 0.861 / 0.771 / 0.712;
+  - energy beats max-softmax only at AWGN severities 2–3 (0.771 vs 0.767, 0.712 vs 0.700). Elsewhere max-softmax is ahead by ≤ 0.01.
+- Figure: `shift_b_drop.png`.
+
+**Limitations to state in the paper**
+- Shift B is simulated per window, not a real second receiver (E8 is out of scope).
+- One fixed impairment draw: the CI covers model variance, not draw variance.
+- ADC full scale follows the window RMS (per-window AGC), so ADC and gain are measured separately, not jointly.
+- CFO, IQ imbalance and slow gain drift across windows are not modelled.

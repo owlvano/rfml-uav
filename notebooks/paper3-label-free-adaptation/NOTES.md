@@ -70,10 +70,18 @@ See README "Phase 1".
 - **Receiver shortcut:** confirmed (noise-only accuracy 0.43, group accuracy 0.98). In-band cropping doesn't remove it.
 - **Errors under interference** flow into group-A classes, which suggests the raised noise floor is read as "group A". Adaptive normalisation should target exactly this.
 
+## Phase 2 outcome (2026-10-19)
+
+See README "Phase 2".
+- **Shift B is strong enough to adapt on.** On DroneDetect, AWGN severity 2–3 costs 18–32 pp, as much as or more than shift A. Gain, tilt and ADC are mild (≤ 6 pp at severity 3). Tilt needed the severity-4 escalation (6.9 pp).
+- **Why AWGN hurts DroneDetect so much (hypothesis, untested).** The Phase 1 shortcut test showed the model reads the noise floor and out-of-band WPD nodes. AWGN fills exactly those nodes, so the AWGN loss is probably the receiver shortcut breaking, not signal loss.
+  - Check: per-node feature shift under AWGN, and the AWGN drop for in-band-only features.
+  - Paper angle: adaptive normalisation should recover AWGN most.
+- **Normalisation is a free defence against gain.** The unit-power I/Q features ignore a constant gain change. The un-normalised DroneRF WPD loses up to 46 pp. This is a Methods point. It also suggests re-normalising DroneRF features if DroneRF stays in the adaptation experiments.
+- **The energy score doesn't clearly beat max-softmax under shift B.** It wins only at strong AWGN. The open-set gate (E5-lite) should report both scores.
+
 ## Next session
 
-1. Archive `dronedetect-source-baseline` after review.
-2. Next change: shift B, a receiver-impairment simulator (4 impairments × 3 severities: AWGN, gain/AGC drift, frequency-response tilt, ADC bits + clipping) on cached features from both datasets (E2).
-   - Plan go/no-go: if source-only loses < 3 pp, raise the severity.
-3. Then the adaptation baselines (AdaBN, TENT, naive pseudo-labelling) against the DroneDetect source model (E3).
-4. Hardware check for the Nov 15 go/no-go: order or borrow the Jetson and power meter.
+1. Review and archive `receiver-impairment-shift`.
+2. E3: AdaBN / TENT / naive pseudo-labelling on the shift-A (BLUE / WIFI / BOTH) and shift-B targets. The impaired sets in `phase2/` are row-aligned with the clean ones, so a target is a plain feature matrix.
+3. Hardware go/no-go on Nov 15 (Jetson, power meter).
