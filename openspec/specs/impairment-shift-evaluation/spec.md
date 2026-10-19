@@ -7,7 +7,7 @@ Measures how much receiver impairments (shift B) cost the frozen paper-3 source 
 ## Requirements
 
 ### Requirement: Impaired feature sets
-For every (dataset, impairment, severity), the impaired features SHALL be computed from re-read raw windows with the unchanged clean feature code. They SHALL be row-aligned with the clean feature file and carry its provenance. DroneDetect covers all CLEAN active rows; DroneRF covers all non-duplicate rows, with L and H impaired independently.
+For every (dataset, impairment, severity), the impaired features SHALL be computed from re-read raw windows with the unchanged clean feature code. They SHALL be row-aligned with the clean feature file and carry its provenance. DroneDetect covers all CLEAN active rows and, in a separate set per cell, all CLEAN noise-only rows; DroneRF covers all non-duplicate rows, with L and H impaired independently.
 
 #### Scenario: Row alignment
 - **WHEN** an impaired feature file is loaded
@@ -20,6 +20,10 @@ For every (dataset, impairment, severity), the impaired features SHALL be comput
 #### Scenario: Clean data untouched
 - **WHEN** impaired sets are built
 - **THEN** the Phase 0 / Phase 1 feature files, run files and checkpoints are unchanged
+
+#### Scenario: Noise rows impaired like active rows
+- **WHEN** the DroneDetect noise-row set of a cell is built
+- **THEN** each noise row is impaired with the same impairment, severity and per-row seeding rule as active rows, and the existing active-row files are unchanged
 
 ### Requirement: Source-only scoring without retraining
 Each of the 25 saved Phase 1 linear-tail DroneDetect models and the 25 saved Phase 0 `recording_dedup` DroneRF models SHALL be scored on the impaired version of its own test rows only. No model is trained, fine-tuned or re-selected on impaired data.
