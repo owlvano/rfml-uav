@@ -71,3 +71,10 @@ The report SHALL state whether a constant gain change alone (no in-window step) 
 #### Scenario: DroneRF sensitive
 - **WHEN** a constant gain offset alone is applied to DroneRF windows
 - **THEN** the report gives the resulting macro-F1 drop for that offset
+
+### Requirement: Receiver-shortcut check under shift B
+The saved Phase 1 in-band models SHALL be scored on the same DroneDetect impaired sets. The report SHALL give, per cell, the full-band and in-band macro-F1 drops and their paired difference with Wilcoxon p and 95% bootstrap CI. Under AWGN it SHALL also give the relative feature shift of in-band vs out-of-band wavelet nodes.
+
+#### Scenario: Shortcut share of the AWGN loss
+- **WHEN** E2 completes
+- **THEN** each DroneDetect cell has a full-band − in-band drop difference with CI and p, and each AWGN cell has the in-band and out-of-band relative node shift

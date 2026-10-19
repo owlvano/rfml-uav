@@ -74,14 +74,20 @@ See README "Phase 1".
 
 See README "Phase 2".
 - **Shift B is strong enough to adapt on.** On DroneDetect, AWGN severity 2–3 costs 18–32 pp, as much as or more than shift A. Gain, tilt and ADC are mild (≤ 6 pp at severity 3). Tilt needed the severity-4 escalation (6.9 pp).
-- **Why AWGN hurts DroneDetect so much (hypothesis, untested).** The Phase 1 shortcut test showed the model reads the noise floor and out-of-band WPD nodes. AWGN fills exactly those nodes, so the AWGN loss is probably the receiver shortcut breaking, not signal loss.
-  - Check: per-node feature shift under AWGN, and the AWGN drop for in-band-only features.
-  - Paper angle: adaptive normalisation should recover AWGN most.
+- **Why AWGN hurts DroneDetect so much (confirmed, README "Receiver shortcut under AWGN").** In-band models lose 40–75% less under AWGN, and out-of-band nodes shift about 8× more than in-band ones. Most of the AWGN loss is the receiver shortcut breaking. The rest is SNR loss.
+  - Paper angle: adaptive normalisation should recover AWGN most. E3 tests that directly.
+  - Open: in-band models are *less* robust to a gain step. Mechanism unknown; check per-node shift under `gain` before writing.
 - **Normalisation is a free defence against gain.** The unit-power I/Q features ignore a constant gain change. The un-normalised DroneRF WPD loses up to 46 pp. This is a Methods point. It also suggests re-normalising DroneRF features if DroneRF stays in the adaptation experiments.
 - **The energy score doesn't clearly beat max-softmax under shift B.** It wins only at strong AWGN. The open-set gate (E5-lite) should report both scores.
 
 ## Next session
 
-1. Review and archive `receiver-impairment-shift`.
-2. E3: AdaBN / TENT / naive pseudo-labelling on the shift-A (BLUE / WIFI / BOTH) and shift-B targets. The impaired sets in `phase2/` are row-aligned with the clean ones, so a target is a plain feature matrix.
-3. Hardware go/no-go on Nov 15 (Jetson, power meter).
+1. E3 (new OpenSpec change): AdaBN / TENT / naive pseudo-labelling on the frozen DroneDetect models. Decisions (author, 2026-10-19):
+   - **Targets:** shift A (BLUE / WIFI / BOTH) and shift B (awgn 2–3, gain 3, adc 3, tilt 4).
+   - **Split:** adapt on half the target recordings, test on the other half, split by recording.
+   - **DroneRF:** dropped from E3, appendix at most.
+2. **Hardware (none yet, 2026-10-19).**
+   - Order an RPi 5 and a USB-C power meter with logging (or an INA226) this week. This is the main E9 platform.
+   - CloudJetson (AGX Orin 64GB, ~$1.70/h) is a secondary data point, if they confirm `tegrastats` per-rail power and sudo for `nvpmodel` / `jetson_clocks`. Report it as AGX Orin, not as an Orin Nano proxy.
+   - Hardware-independent numbers in any case: MACs per segment, parameters updated per event, update rate.
+   - Go/no-go Nov 15.

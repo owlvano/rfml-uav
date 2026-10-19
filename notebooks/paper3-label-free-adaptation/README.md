@@ -164,6 +164,18 @@ Notebook: `4_Receiver_Impairment_Shift.ipynb`. Results in `results/paper3/phase2
   - energy beats max-softmax only at AWGN severities 2–3 (0.771 vs 0.767, 0.712 vs 0.700). Elsewhere max-softmax is ahead by ≤ 0.01.
 - Figure: `shift_b_drop.png`.
 
+**Receiver shortcut under AWGN** (`shortcut_inband.csv`). The 25 Phase 1 in-band models (nodes ≤ 14 MHz, 120-d, clean macro-F1 0.702) were scored on the same impaired sets. Drop in pp; difference = full-band drop − in-band drop [95% CI].
+
+| AWGN | full-band | in-band | difference | rel. feature shift, in-band / out-of-band nodes |
+|---|---|---|---|---|
+| 20 dB | −6.2 | −1.6 | 4.6 [2.9, 6.2] | 0.04 / 0.35 |
+| 10 dB | −18.5 | −10.1 | 8.4 [6.2, 10.2] | 0.17 / 1.40 |
+| 5 dB | −31.8 | −18.7 | 13.2 [10.0, 16.1] | 0.34 / 2.50 |
+
+- **40–75% of the AWGN loss is the receiver shortcut breaking.** Noise fills the quiet out-of-band nodes, which move about 8× more than in-band nodes. The rest (10–19 pp) is genuine SNR loss.
+- **Gain is the opposite:** the in-band model is *less* robust (−4.9 / −8.8 / −12.3 vs −0.7 / −2.2 / −5.5 pp). Not yet explained.
+- ADC 3 hurts the full-band model more (2.7 pp [1.5, 4.1]). Tilt shows no significant difference.
+
 **Limitations to state in the paper**
 - Shift B is simulated per window, not a real second receiver (E8 is out of scope).
 - One fixed impairment draw: the CI covers model variance, not draw variance.

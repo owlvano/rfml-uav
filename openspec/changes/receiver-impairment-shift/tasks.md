@@ -52,6 +52,8 @@
 - [x] 4.4 Add the energy and max-softmax AUROC (correct vs wrong) per DroneDetect cell to `shift_b_auroc.csv`, plus the DroneRF gain-offset-only drop from 3.4 to `gain_invariance.csv`. Verify both files exist and every DroneDetect cell has both AUROCs.
 - [x] 4.5 Escalation cell (design D9): list the kinds whose DroneDetect severity-3 mean drop is < 3 pp. For each, extract severity 4 for both datasets (3.2/3.3 cells with `s=4`), score them (4.1/4.2), and append the rows marked `escalation=True`. Verify severity-4 rows exist exactly for the listed kinds.
 
+- [x] 4.6 (added during apply, author-approved) Receiver-shortcut check: score the 25 Phase 1 `active_inband_linear` models on the DroneDetect impaired sets. Report the full-band − in-band drop with `paired_test`, and the relative per-node feature shift (in-band vs out-of-band) under AWGN, in `shortcut_inband.csv`. Verify every DroneDetect cell has a row.
+
 ## 5. Write-up
 
 - [x] 5.1 Add a "Phase 2 — Receiver-impairment shift (shift B, E2)" section to `notebooks/paper3-label-free-adaptation/README.md`: protocol, severity table, the shift-B table, AUROC summary, the gain-invariance finding, escalation outcome, limitations (simulated receiver, one impairment draw, per-window AGC full scale). Verify every number in it matches the CSVs.
