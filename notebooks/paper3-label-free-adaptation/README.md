@@ -244,3 +244,71 @@ Over 25 runs, AdaBN on the clean adapt half loses 2.3 pp [0.8, 4.0]. The impleme
 - The shift-B adapt sets are small (7 recordings), which biases BatchNorm-based baselines (above).
 - The dev shifts are mild, so the tuning signal is weak and favours light updates. OG-TCST will be tuned with the same grid and cells.
 - Offline regime only. Streaming versions come with OG-TCST.
+
+## Phase 4 — Receiver-normalised source (thesis 3.2)
+
+Notebook: `6_Receiver_Normalised_Source.ipynb`, plus E3 re-run via `SOURCE=noisenorm` (`5_Adaptation_Baselines_noisenorm.ipynb`). Results in `results/paper3/phase4/` and `results/paper3/phase3/noisenorm/`.
+
+**Method** (`rfml_uav.data.normalise`)
+- Every 256-d WPD vector is **centred** per feature on the mean of the noise-only windows of its own receiver session: `f − μ_noise`. The same transform is used at training and at test time.
+- Two estimators:
+  - **session:** all noise windows of the recording;
+  - **stream:** EMA over noise windows in time order, β = 0.01, warm-up k = 50 noise windows, no look-ahead. Warm-up excludes 6.3% of active rows.
+- Shift B: impaired active windows are centred on the *impaired* noise windows of the same recording (`phase2/dronedetect_noise/`).
+- Source models: Phase 1 protocol with identical folds (checked against all 25 Phase 1 test sets), linear tail, 25 runs. Checkpoints in `checkpoints/paper3/noisenorm/`.
+- **Rejected variant: (f − μ) / σ.** It was run first and is kept as an ablation (`phase4_std/`, `checkpoints/paper3/noisenorm_std/`). The noise σ reacts to receiver changes differently from active windows (a 3 dB gain step shrinks it to 0.56×), so the division inflates features.
+
+**E1 — interference** (`e1_table.csv`; macro-F1 mean over 25 runs; Δ vs Phase 1 in pp, paired; all centred Δ p ≤ 1.2e-7)
+
+| subset | Phase 1 | centred (session) | Δ | centred (stream) | Δ | std ablation Δ |
+|---|---|---|---|---|---|---|
+| CLEAN | 0.727 | **0.821** | +9.4 | 0.818 | +8.8 | −2.5 |
+| BLUE | 0.583 | **0.695** | +11.2 | 0.685 | +10.2 | +4.4 |
+| WIFI | 0.588 | **0.705** | +11.7 | 0.694 | +11.1 | −0.1 |
+| BOTH | 0.462 | **0.587** | +12.5 | 0.580 | +11.9 | +3.0 |
+
+**E2 — receiver impairments** (`e2_table.csv`; Δ vs Phase 1 in pp, session estimator)
+
+| impairment | s1 | s2 | s3 | s4 |
+|---|---|---|---|---|
+| awgn | +14.6 | +16.6 | +15.2 | |
+| adc | +9.4 | +9.6 | +7.2 | |
+| tilt | +9.2 | +5.6 | **−12.6** | **−25.8** |
+| gain (step in **every** window) | **−55.0** | **−58.7** | **−56.0** | |
+| gain, rare steps (5% of windows; `agc_rare.csv`) | +7.8 | +7.1 | +6.8 | |
+
+- **Gain:** the every-window construction corrupts the noise windows the correction is estimated from. With realistic, rare AGC steps, centring beats Phase 1 by about 7 pp.
+- **Tilt ≥ 12 dB is a real limitation:** it changes the spectral shape of noise and signal differently, and a mean-only correction can't absorb that. TENT on top of the centred source recovers it (tilt 4: 0.696 vs Phase 1's best 0.664).
+- **β barely matters** (`beta_sensitivity.csv`): BOTH 0.582 / 0.580 / 0.574 and awgn 3 0.562 / 0.562 / 0.561 for β = 0.003 / 0.01 / 0.03.
+
+**Shortcut re-test** (`shortcut_test.csv`; CNN trained on centred noise-only windows)
+- 7-class accuracy: 0.43 → **0.317** (chance 0.143, flag at 0.286).
+- Receiver-group accuracy: 0.98 → **0.907**.
+- **Weaker but still flagged.** Centring removes the floor *level*, not its *shape*. (The std ablation reached 0.202 / 0.654, at the cost of accuracy.)
+
+**E3 on the centred source** (`phase3/noisenorm/e3_table.csv`, same splits and hyperparameters as Phase 3; source-only → best baseline)
+
+| target | Phase 1 source → best | centred source → best |
+|---|---|---|
+| BLUE / WIFI / BOTH | 0.588 / 0.585 / 0.457 → ≈ same | **0.704 / 0.703 / 0.585** → 0.705 / 0.712 / 0.591 |
+| awgn 2 / awgn 3 | 0.550 / 0.409 → 0.640 / 0.573 (TENT) | 0.698 / 0.548 → **0.753 / 0.714** (TENT) |
+| adc 3 | 0.685 → 0.685 | **0.755** → 0.765 (TENT) |
+| tilt 4 | 0.657 → 0.664 (PL) | 0.397 → **0.696** (TENT) |
+| gain 3 (every window) | 0.669 → 0.674 (PL) | 0.114 → 0.395 (AdaBN) |
+| agc 3 (rare steps; `e3_agc.csv`) | 0.720 → ≈ same | **0.785** → ≈ same |
+
+On the centred source, adaptation finally has a job: it recovers 41–70% of the tilt-4 and gain-3 failures. AdaBN on clean data still loses 2.9 pp [0.6, 5.6] with the 7-recording shift-B adapt sets (as in Phase 3).
+
+**Adoption decision** (`adoption.json`)
+- **Original rule** (8 E3 targets): centred − Phase 1 = −1.2 pp [−2.3, −0.1], p = 0.07 → Phase 1. This is driven by gain 3 (−56 pp).
+- **Amended rule** (author decision 2026-10-19; `gain_3` → `agc_3`): **+6.6 pp [5.6, 7.5], p = 6e-8 → centred source adopted.**
+  - Reason: `gain_3` steps every window, including the noise windows the normalisation is estimated from. The rare-step AGC check was specified before the original rule was evaluated.
+  - **The paper reports both.**
+- CLEAN: +9.4 pp [7.7, 11.1].
+
+**Limitations to state in the paper**
+- The noise/active window labels are offline (`select_windows`, recording-level percentile). Online detection is the paper-2 cascade's job.
+- Streams start cold per recording (6.3% of rows excluded during warm-up).
+- The shortcut is weakened, not removed (receiver-group accuracy 0.907).
+- Centring fails under strong spectral tilt and under gain steps that hit the noise windows themselves.
+- The adoption rule was amended post hoc (disclosed above).

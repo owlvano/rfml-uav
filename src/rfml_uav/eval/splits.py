@@ -1,6 +1,7 @@
 from typing import Literal
 
 import numpy as np
+from imblearn.under_sampling import RandomUnderSampler
 from sklearn.model_selection import StratifiedGroupKFold, StratifiedKFold
 
 
@@ -41,6 +42,18 @@ def make_splits(
     return folds
 
 
+
+def undersample(idx, y, seed: int) -> np.ndarray:
+    """Rows `idx` with every class undersampled to the smallest (paper-3 source protocol), sorted.
+
+    y is indexed by idx (y[idx] are the labels of those rows).
+    """
+    idx = np.asarray(idx)
+    rus = RandomUnderSampler(sampling_strategy="not minority", random_state=seed)
+    rus.fit_resample(idx.reshape(-1, 1), np.asarray(y)[idx])
+    return np.sort(idx[rus.sample_indices_])
+
+
 if __name__ == "__main__":
     # 4 classes x 21 recordings x 30 chunks
     y = np.repeat(np.arange(4), 21 * 30)
@@ -62,4 +75,9 @@ if __name__ == "__main__":
     # chunk mode really does share recordings between train and test
     tr, _, te = make_splits(y, groups, "chunk", seed=0)[0]
     assert set(groups[tr]) & set(groups[te])
+    # undersample: balanced, deterministic per seed, a subset of idx
+    yy = np.repeat(np.arange(3), [50, 80, 120])
+    sub = undersample(np.arange(len(yy)), yy, seed=1)
+    assert np.array_equal(np.bincount(yy[sub]), [50, 50, 50])
+    assert np.array_equal(sub, undersample(np.arange(len(yy)), yy, seed=1))
     print("splits self-check OK")

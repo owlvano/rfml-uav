@@ -102,6 +102,10 @@ nested archive structure into `raw/`.
 - **`data/wavelets.py`** — `wpd_features` (dmey level-6 wavelet packet, RMS+STD per node = 128 per real
   channel; used by the DroneRF Wavelets notebook) and `iq_wpd_features` (complex window → DC removed,
   unit power, WPD(I) ‖ WPD(Q) = 256).
+- **`data/normalise.py`** — receiver-noise normalisation (thesis 3.2), centring only: `noise_mean`, `centre`,
+  `session_normalise(X, rec_id, is_noise)` (per-recording noise mean) and `stream_normalise` (EMA over
+  noise windows, no look-ahead, k-window warm-up). Same transform at training and test time; no division by
+  the noise std (rejected: it inflates features under gain steps).
 - **`data/impairments.py`** — `impair(x, kind, severity, rng)`: shift-B receiver impairments (`awgn`,
   `gain`, `tilt`, `adc`) × severities 1–3 (+4 escalation) on real or complex windows; severity 0 =
   identity; seed `default_rng([seed, KIND_ID[kind], severity, row_id])` for per-row determinism.
@@ -110,6 +114,7 @@ nested archive structure into `raw/`.
   passes per window + updated-param count (E3; reused by the OG-TCST stream harness).
 - **`eval/splits.py`** — `make_splits(y, groups, mode)`: K outer test folds + val carved from train;
   `mode="recording"` groups by `f"{bui}_{n}"` (leakage-free), `mode="chunk"` is the legacy paper-1 split.
+  `undersample(idx, y, seed)`: the paper-3 class balancing (every class down to the smallest).
 - **`eval/metrics.py`** — `classification_report_dict`: accuracy, macro-F1, per-class P/R/F1,
   confusion matrix, max-softmax confidence split by correct/wrong.
 - **`eval/stats.py`** — `paired_test(a, b)`: paired mean diff over runs, 95% bootstrap CI, Wilcoxon p

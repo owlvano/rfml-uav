@@ -95,11 +95,25 @@ See README "Phase 3".
 - **Protocol issue.** One recording per class in the shift-B adapt half biases BatchNorm methods by about 2–3 pp. If shift-B comparisons matter for OG-TCST, consider adapting on impaired *train* recordings (unlabeled, but the model trained on their clean versions). That needs an author decision.
 - **Bug fixed during apply.** The AdaBN statistics pass first walked recording-sorted rows in order, which underestimated the variance (clean-data loss −4.9 pp). It now shuffles, and the self-check tests the variance.
 
+## Phase 4 outcome (2026-10-19)
+
+See README "Phase 4".
+- **3.2 holds, but as centring at train *and* test time, not std-normalisation.** Centring on the noise mean gives +9 to +17 pp on CLEAN, interference, AWGN and ADC, with no gradients and no labels: one running mean per receiver. This is now the paper's strongest and cheapest result, and it suits *Energies*.
+- **Dividing by the noise σ is wrong for this data.** The noise σ reacts to receiver changes unlike active windows (a 3 dB gain step shrinks it to 0.56×). Kept as an ablation.
+- **Failure modes of centring:** strong tilt (≥ 12 dB) and gain steps inside the noise windows. TENT on top of the centred source recovers tilt 4 (0.696), so the adaptation step has a real job now.
+- **The shortcut is weaker but not gone** (receiver-group accuracy from noise 0.98 → 0.91). Centring removes the floor level, not its shape. A stated limitation.
+- **Source for OG-TCST: centred (amended rule, +6.6 pp, p = 6e-8).** The original rule chose Phase 1 (−1.2 pp, p = 0.07, driven by the adversarial every-window gain cell). Both are disclosed.
+- **Implication for OG-TCST.** Shift A gains already come from centring (BOTH 0.462 → 0.587). OG-TCST must earn its energy cost on the remaining gaps:
+  - BOTH 0.59;
+  - strong tilt and gain steps (where TENT helps);
+  - unknown drones (the gate).
+- **Story reframe (to do in the planning doc):** lead with 3.2 (cheap, large effect). OG-TCST becomes "what event-triggered updates add on top, at what energy cost". Confirm the RQ numbering.
+
 ## Next session
 
-1. Review and archive `adaptation-baselines` (E3).
-2. Decide on the shift-B adapt pool: keep the 7 test recordings, or switch to impaired train recordings.
-3. OG-TCST design (new OpenSpec change), aimed at shift A, where every baseline fails. Re-run the baselines in the stream harness.
+1. Archive `receiver-normalised-source`, merge, push. Back up `data/drone-rf/results` and `checkpoints` (gitignored).
+2. Reframe the plan and RQs around 3.2-first (see Phase 4 outcome).
+3. OG-TCST (lean) on the centred source: stream harness (centring stream estimator + time-ordered windows), energy gate, temporal-vote pseudo-labels, head-only updates. Baselines re-run in the stream with the same voting. E5-lite once the gate exists.
 4. **Hardware (none yet, 2026-10-19).**
    - Order an RPi 5 and a USB-C power meter with logging (or an INA226) this week. This is the main E9 platform.
    - CloudJetson (AGX Orin 64GB, ~$1.70/h) is a secondary data point, if they confirm `tegrastats` per-rail power and sudo for `nvpmodel` / `jetson_clocks`. Report it as AGX Orin, not as an Orin Nano proxy.
