@@ -104,7 +104,8 @@ nested archive structure into `raw/`.
   unit power, WPD(I) ‖ WPD(Q) = 256).
 - **`data/normalise.py`** — receiver-noise normalisation (thesis 3.2), centring only: `noise_mean`, `centre`,
   `session_normalise(X, rec_id, is_noise)` (per-recording noise mean) and `stream_normalise` (EMA over
-  noise windows, no look-ahead, k-window warm-up). Same transform at training and test time; no division by
+  noise windows, no look-ahead, k-window warm-up; `return_drift=True` adds the per-window noise-floor drift
+  ‖μ_i − μ_0‖₁/‖μ_0‖₁ against the warm-up mean, the receiver gate's input). Same transform at training and test time; no division by
   the noise std (rejected: it inflates features under gain steps).
 - **`data/impairments.py`** — `impair(x, kind, severity, rng)`: shift-B receiver impairments (`awgn`,
   `gain`, `tilt`, `adc`) × severities 1–3 (+4 escalation) on real or complex windows; severity 0 =
@@ -118,6 +119,9 @@ nested archive structure into `raw/`.
   `source`, `triggered` (guarded BN refresh: full if buffer votes cover ≥ D classes, else conv-BN λ-blend),
   `continuous`, `periodic`, `tent`, `pl`, `vote_pl`, `vote_pl_head`. Returns pred/vote/energy/known + `cost`
   (window-passes, events, refreshes, changed counts). Self-check: `python -m rfml_uav.adapt.stream`.
+  Phase 6 (optional `drift` argument): `balanced` (continuous AdaBN on a per-vote-class FIFO buffer, Bc per class,
+  updates only when ≥ D classes are half full), `gated_continuous` / `gated_balanced` (only while the receiver gate
+  is ON: drift > φ_on, OFF below h·φ_on restores the source BN statistics).
 - **`eval/splits.py`** — `make_splits(y, groups, mode)`: K outer test folds + val carved from train;
   `mode="recording"` groups by `f"{bui}_{n}"` (leakage-free), `mode="chunk"` is the legacy paper-1 split.
   `undersample(idx, y, seed)`: the paper-3 class balancing (every class down to the smallest).

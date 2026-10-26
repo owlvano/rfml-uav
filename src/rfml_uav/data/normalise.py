@@ -25,26 +25,35 @@ def session_normalise(X, rec_id, is_noise):
     return out
 
 
-def stream_normalise(X, is_noise, beta: float = 0.01, k: int = 50, return_state: bool = False):
-    """One time-ordered stream -> (Xn, valid[, mu]).
+def stream_normalise(X, is_noise, beta: float = 0.01, k: int = 50, return_state: bool = False,
+                     return_drift: bool = False):
+    """One time-ordered stream -> (Xn, valid[, mu][, drift]).
 
     Warm-up: mean of the first k noise windows; windows up to the k-th noise window are not valid.
     Then each window is centred with the state before its own update, and only noise windows update
     the state (EMA, rate beta): no look-ahead, active windows never move it.
+    drift (optional, per window): |mu_i - mu_0|_1 / |mu_0|_1 of the state used for window i against the warm-up
+    mean mu_0 (noise-floor drift, the receiver gate's input); NaN before warm-up.
     """
     X = np.asarray(X, dtype=np.float64)
     is_noise = np.asarray(is_noise, dtype=bool)
     out, valid = np.zeros(X.shape, dtype=np.float32), np.zeros(len(X), dtype=bool)
+    drift = np.full(len(X), np.nan)
     noise_idx = np.flatnonzero(is_noise)
-    if len(noise_idx) < k:
-        return (out, valid, None) if return_state else (out, valid)
-    mu = noise_mean(X[noise_idx[:k]])
-    for i in range(noise_idx[k - 1] + 1, len(X)):
-        out[i] = X[i] - mu
-        valid[i] = True
-        if is_noise[i]:
-            mu = mu + beta * (X[i] - mu)
-    return (out, valid, mu) if return_state else (out, valid)
+    mu = None
+    if len(noise_idx) >= k:
+        mu = mu0 = noise_mean(X[noise_idx[:k]])
+        norm0 = np.abs(mu0).sum()
+        d = 0.0
+        for i in range(noise_idx[k - 1] + 1, len(X)):
+            out[i] = X[i] - mu
+            valid[i] = True
+            drift[i] = d
+            if is_noise[i]:
+                mu = mu + beta * (X[i] - mu)
+                if return_drift:
+                    d = np.abs(mu - mu0).sum() / norm0
+    return (out, valid) + ((mu,) if return_state else ()) + ((drift,) if return_drift else ())
 
 
 if __name__ == "__main__":
@@ -88,4 +97,13 @@ if __name__ == "__main__":
     _, valid = stream_normalise(X, noise, k=50)
     kth = np.flatnonzero(noise)[49]
     assert not valid[:kth + 1].any() and valid[kth + 1:].all()
+    # drift: ~0 on stationary noise; -> |a - 1| when the floor is scaled by a; outputs unchanged
+    S3 = rng.normal(3, 0.5, (6000, d))
+    _, _, dr = stream_normalise(S3, np.ones(6000, bool), k=50, return_drift=True)
+    assert np.nanmax(dr) < 0.05, np.nanmax(dr)
+    S3[3000:] *= 1.5
+    o1, v1, dr = stream_normalise(S3, np.ones(6000, bool), k=50, return_drift=True)
+    assert abs(dr[-1] - 0.5) < 0.02 and dr[2999] < 0.05, (dr[2999], dr[-1])
+    o2, v2 = stream_normalise(S3, np.ones(6000, bool), k=50)
+    assert np.array_equal(o1, o2) and np.array_equal(v1, v2) and np.isnan(dr[:50]).all()
     print("normalise self-check OK")

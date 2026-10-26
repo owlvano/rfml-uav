@@ -13,11 +13,15 @@ import torch.nn.functional as F
 
 from rfml_uav.adapt.baselines import _batches, _bn_layers, adabn
 
-METHODS = ("source", "triggered", "continuous", "periodic", "tent", "pl", "vote_pl", "vote_pl_head")
+METHODS = ("source", "triggered", "continuous", "periodic", "tent", "pl", "vote_pl", "vote_pl_head",
+           "balanced", "gated_continuous", "gated_balanced")
+GATED = {"gated_continuous", "gated_balanced"}  # receiver gate on the noise-floor drift (Phase 6)
+BALANCED = {"balanced", "gated_balanced"}  # statistics from the drone-balanced buffer
 TRIGGERED = {"triggered", "vote_pl", "vote_pl_head"}
 REFRESHING = TRIGGERED | {"periodic"}  # methods with refresh events: gate and trigger re-anchor after each
 HP = dict(M=250, W=25, q=0.1, theta=3.0, R=4, C=8, B=1000, D=3, lam=0.5,  # D1-D5
-          m=0.1, P=20, lr=1e-4, tau=0.9, rho=0.8, batch_size=256, gate=True)  # D6; lr is per method
+          m=0.1, P=20, lr=1e-4, tau=0.9, rho=0.8, batch_size=256, gate=True,  # D6; lr is per method
+          phi_on=0.5, h=0.5, Bc=200)  # Phase 6: receiver gate (on > phi_on, off < h * phi_on), per-class buffer
 
 
 def energy(z):
@@ -84,9 +88,10 @@ def _chunk_ref(e, M):
     return float(np.mean(means)), float(np.std(means))
 
 
-def run_stream(model, X, active, method, hp, calib, seed=0):
+def run_stream(model, X, active, method, hp, calib, seed=0, drift=None):
     """Run one time-ordered stream. X: centred model inputs for all windows; active: bool flags (only active
-    windows are classified); hp: overrides of HP; calib: source energies on its own CLEAN validation rows.
+    windows are classified); hp: overrides of HP; calib: source energies on its own CLEAN validation rows;
+    drift: optional per-window noise-floor drift (stream_normalise(..., return_drift=True)), read by gated methods.
 
     Returns per-active-window pred, vote, energy, known; `cost` (pass counts, events, refreshes, statistics or
     parameters changed per event, event positions in active windows) and `buffers` (buffer indices per event).
@@ -119,16 +124,20 @@ def run_stream(model, X, active, method, hp, calib, seed=0):
             p.requires_grad_(True)
     if method in ("tent", "pl"):
         opt = torch.optim.Adam(params, lr=hp["lr"])
-    if method == "continuous":
+    if method in ("continuous", "balanced") or method in GATED:
         for bn in _bn_layers(model):
             bn.momentum = hp["m"]
+    source_bn = [(bn.running_mean.clone(), bn.running_var.clone()) for bn in _bn_layers(model)]
+    da = None if drift is None else np.nan_to_num(np.asarray(drift, np.float64)[np.asarray(active, bool)])
+    on, cbuf, on_n = method == "balanced", {}, 0  # cbuf: vote class -> last Bc accepted window indices
 
     pred, vt = np.zeros(n, np.int64), np.zeros(n, np.int64)
     en, known = np.zeros(n, np.float32), np.zeros(n, bool)
     buf = np.zeros(0, np.int64)
     thr, ref = np.quantile(calib, 1 - q), _chunk_ref(calib, M)
     anchor, cool = None, 0  # anchor: (energies, chunk means) collected after a refresh, None when anchored
-    cost = dict(fwd=n, bwd=0, events=0, full_refreshes=0, restricted_refreshes=0, changed_per_event=[], event_at=[])
+    cost = dict(fwd=n, bwd=0, events=0, full_refreshes=0, restricted_refreshes=0, changed_per_event=[], event_at=[],
+                on=[])
     buffers, n_classes = [], None
 
     for k, lo in enumerate(range(0, n, M)):
@@ -190,8 +199,34 @@ def run_stream(model, X, active, method, hp, calib, seed=0):
             buffers.append(buf.copy())
             anchor = ([], [])
 
+        if method in GATED and da is not None:  # after this chunk's predictions: updates follow the new state
+            if not on and da[hi - 1] > hp["phi_on"]:
+                on, cbuf = True, {}  # ON statistics come from post-change windows only
+            elif on and da[hi - 1] < hp["h"] * hp["phi_on"]:
+                on = False
+                for bn, (mu0, var0) in zip(_bn_layers(model), source_bn):
+                    bn.running_mean.copy_(mu0)
+                    bn.running_var.copy_(var0)
+        if method in GATED:
+            cost["on"].append(int(on))
+            on_n += (hi - lo) * on
+        if method in BALANCED:
+            for c in np.unique(vt[idx]):
+                cbuf[c] = np.r_[cbuf.get(c, np.zeros(0, np.int64)), idx[vt[idx] == c]][-hp["Bc"]:]
+
         g = Xa[torch.as_tensor(idx, device=dev)]
-        if method == "continuous" and len(g) >= 2:
+        if method in BALANCED and on:
+            full = [c for c in cbuf if len(cbuf[c]) >= hp["Bc"] / 2]
+            if len(full) >= hp["D"]:
+                g = Xa[torch.as_tensor(np.concatenate([cbuf[c] for c in full]), device=dev)]
+                model.train()
+                with torch.no_grad():
+                    model(g)
+                model.eval()
+                cost["fwd"] += len(g)
+                cost["events"] += 1
+                cost["changed_per_event"].append(n_stats(_bn_layers(model)))
+        elif (method == "continuous" or method == "gated_continuous" and on) and len(g) >= 2:
             model.train()
             with torch.no_grad():
                 model(g)
@@ -218,6 +253,8 @@ def run_stream(model, X, active, method, hp, calib, seed=0):
                 cost["changed_per_event"].append(sum(x.numel() for x in params))
 
     cost["fwd_per_window"], cost["bwd_per_window"] = cost.pop("fwd") / n, cost.pop("bwd") / n
+    cost["updates"] = cost["events"]
+    cost["on_fraction"] = on_n / n if method in GATED else float(method == "balanced")
     return {"pred": pred, "vote": vt, "energy": en, "known": known, "cost": cost, "buffers": buffers}
 
 
@@ -259,7 +296,8 @@ if __name__ == "__main__":
     assert all(torch.equal(before[k], v) for k, v in src.state_dict().items()), "runner changed the source model"
 
     # no label argument
-    assert list(inspect.signature(run_stream).parameters) == ["model", "X", "active", "method", "hp", "calib", "seed"]
+    assert list(inspect.signature(run_stream).parameters) == ["model", "X", "active", "method", "hp", "calib", "seed",
+                                                               "drift"]
 
     # source-only cost: one forward per window, nothing else
     c = run["source"]["cost"]
@@ -330,6 +368,36 @@ if __name__ == "__main__":
     assert f1("triggered") > f1("source") + 0.1, (f1("source"), f1("triggered"))
     # determinism
     assert np.array_equal(run_stream(src, X, active, "vote_pl", {**hp, "lr": 1e-3}, calib)["vote"], run["vote_pl"]["vote"])
+    # --- Phase 6: receiver gate and drone-balanced buffer ---
+    n_all, srun = len(X), run["source"]
+    for m in GATED:  # stable floor (or no drift at all): gated == source, no updates, one forward per window
+        for d in (np.zeros(n_all), None):
+            o = run_stream(src, X, active, m, {}, calib, drift=d)
+            assert np.array_equal(o["vote"], srun["vote"]) and o["cost"]["updates"] == 0, m
+            assert o["cost"]["fwd_per_window"] == 1.0 and o["cost"]["on_fraction"] == 0.0, m
+    # hysteresis: ON above phi_on, stays ON between h * phi_on and phi_on, OFF below; OFF restores the source
+    pos = np.flatnonzero(active)
+    d = np.zeros(n_all)
+    d[pos[cpa]:] = 1.0
+    d[pos[cpa + 4 * HP["M"]]:] = 0.3        # between 0.25 and 0.5: stays ON
+    off_at = cpa + 12 * HP["M"]
+    d[pos[off_at]:] = 0.1                   # below 0.25: OFF
+    o = run_stream(src, X, active, "gated_continuous", {}, calib, drift=d)
+    on = np.array(o["cost"]["on"])
+    k_on, k_off = cpa // HP["M"], off_at // HP["M"]
+    assert not on[:k_on].any() and on[k_on + 1:k_off].all() and not on[k_off + 1:].any(), on
+    assert o["cost"]["updates"] > 0 and o["cost"]["bwd_per_window"] == 0
+    after = (k_off + 1) * HP["M"]           # the chunk after the OFF switch is predicted by the source state again
+    assert np.allclose(o["energy"][after:], srun["energy"][after:], atol=1e-5)
+    assert not np.allclose(o["energy"][cpa + HP["M"]:off_at], srun["energy"][cpa + HP["M"]:off_at], atol=1e-5)
+    # balanced buffer: a single-drone stream never updates; per-class cap bounds every update batch
+    Xone = (centres[torch.zeros(6000, dtype=torch.long)] + 0.5 * torch.randn(6000, 2)).unsqueeze(1)
+    o = run_stream(src, Xone, np.ones(6000, bool), "balanced", {}, calib)
+    assert o["cost"]["updates"] == 0 and o["cost"]["fwd_per_window"] == 1.0
+    o = run["balanced"]["cost"]
+    assert o["updates"] > 0 and o["bwd_per_window"] == 0
+    per_update = (o["fwd_per_window"] - 1) * len(ya) / o["updates"]
+    assert per_update <= 3 * HP["Bc"], per_update
     print({m: round(f1(m), 3) for m in METHODS})
     print({m: (round(o["cost"]["fwd_per_window"], 2), round(o["cost"]["bwd_per_window"], 2), o["cost"]["events"])
            for m, o in run.items()})

@@ -154,14 +154,35 @@ New from Phase 5:
 - **Continuous AdaBN gated by that trigger:** on only after a detected receiver change, back to source on recovery.
 - **A better open-set score** (Mahalanobis on penultimate features, or an energy score after temperature scaling), with gate thresholds per receiver condition.
 
+## Phase 6 outcome (2026-10-26, post hoc)
+
+See README "Phase 6". Designed after the Phase 5 targets were seen; the user approved the follow-up as "report frozen + follow-up". Reported beside the frozen rows.
+
+- **Does gating/balancing resolve the Phase 5 trade-off? Partly.**
+  - The noise-floor gate fixes it **for gain steps**: gated continuous AdaBN gives +19.4 pp [14.6, 24.3] on gain 3 with 0 prefix harm and 0 change elsewhere, at 1.03 forward passes per window. The gate never opens on a clean prefix (φ_on = 0.7 is above the receiver-group spread of ≈ 0.49).
+  - It misses AWGN and most tilt, which barely move the noise mean (tilt 4 detected in 12% of streams, +2.7 pp, n.s.).
+- **The oracle bound reframes "when to adapt".** Even a perfect change-point gate loses 2–10 pp on interference / agc / adc. Gating must be *selective* (adapt only shifts that BN statistics can fix), not just change-sensitive.
+  - The headroom left: awgn 3 +12.1, tilt 4 +22.2 (oracle).
+- **The balanced buffer** removes the harm (prefix +0.3 to +0.8) but keeps only 0–3 pp of gain, at 5.7 forward passes per window. Not worth it.
+- **gated_balanced is inert:** after ON, the votes under severe shift never cover D = 5 classes, so it never updates.
+
+**RQ3 answer (with Phase 5):**
+- Label-free adaptation on top of centring + vote pays only when it is gated by a cheap receiver-side signal *and* that signal is selective.
+- The noise-floor gate gives a harm-free +19 pp on gain steps at about 3% extra compute.
+- A detector for AWGN/tilt that is just as selective is the remaining gap (oracle +12 / +22).
+
+**Alternatives deferred** (on top of the Phase 5 list):
+- Selective gates for AWGN and tilt: noise-floor *shape* (spectral slope of μ for tilt; noise σ / kurtosis for AWGN), checked against the oracle.
+- A combined gate: floor OR an energy trigger with a detection-rate target.
+- gated_balanced with D = 3 or a vote-free buffer (per-recording reservoirs).
+- Single-drone and E5-lite runs for gated continuous.
+- A drift reference other than the first warm-up (a deployment's calibration floor).
+
 ## Next session
 
-1. Review Phase 5. Archive `stream-statistics-adaptation`, commit, merge, push. Back up `data/drone-rf/results` and `checkpoints` (gitignored, now incl. `checkpoints/paper3/loco/`).
-2. **Story:** lead with rungs 1 + 2 (centring + vote, both free). Present adaptation as a costed trade-off with an honest "when to adapt" gap. Decide whether the follow-up (noise-floor trigger + gated continuous AdaBN + balanced buffer) fits before 2027-01-20.
-3. **E9** on the ledger: WPD 3.91 M + CNN 1.87 M MACs/window. Feature extraction dominates (68%), which matters for the energy story.
-4. Light ablations (W, θ, update scope) on dev cells only.
-5. **Hardware (none yet, 2026-10-19).**
-   - Order an RPi 5 and a USB-C power meter with logging (or an INA226). This is the main E9 platform.
-   - CloudJetson (AGX Orin 64GB, ~$1.70/h) is a secondary data point, if they confirm `tegrastats` per-rail power and sudo for `nvpmodel` / `jetson_clocks`. Report it as AGX Orin, not as an Orin Nano proxy.
-   - Go/no-go Nov 15.
-6. Writing: Methods 3.2/3.3 as the ladder; Results RQ1–RQ4.
+1. Review Phase 6. Archive `receiver-gated-adaptation`, commit, merge, push. Back up `results/paper3/phase6` to the KINGSTON drive (rsync as before).
+2. **Story:** rungs 1 + 2 free (centring, vote). Rung 3 = noise-floor-gated continuous AdaBN: harm-free +19 pp on gain steps. Phase 5's frozen trade-off and the oracle motivate selective gating; AWGN/tilt detection is future work, or one more iteration if time allows (deadline 2027-01-20).
+3. **E9** on the ledger. Gated continuous adds ≈ 3% forward passes. Features ≈ 68% of compute.
+4. **Hardware:** RPi 5 and power meter (go/no-go Nov 15). CloudJetson as a secondary data point.
+5. Light ablations on dev cells only (W, φ_on, m).
+6. Writing: Methods 3.2/3.3 as the ladder; Results RQ1–RQ4, with the post-hoc Phase 6 disclosed.

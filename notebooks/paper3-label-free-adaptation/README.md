@@ -425,3 +425,75 @@ The ladder figure is `ladder.png`.
 - **E5-lite is seed 0 only** (35 models); variation is over folds and classes.
 - **Noise/active labels are offline,** as in Phase 4.
 - **Frozen-protocol result.** These numbers come from the pre-registered dev tuning. Fixes suggested by the results (see NOTES "Phase 5 outcome") need a new change and are disclosed as post hoc.
+
+## Phase 6 — Receiver-gated, drone-balanced statistics (post hoc)
+
+Notebook: `9_Gated_Adaptation.ipynb`. Results in `results/paper3/phase6/`.
+
+**Post-hoc disclosure.** These methods were designed on 2026-10-26, after the frozen Phase 5 target results were seen. A spike ran five balanced-buffer settings on the dev cells only. Every Phase 6 row is reported beside the frozen Phase 5 rows on identical streams: the rows and the source-only votes are checked against `phase5/streams`.
+
+**Methods** (`rfml_uav.adapt.stream`; drift from `stream_normalise(..., return_drift=True)`)
+- **Noise-floor drift:** ‖μ_i − μ_0‖₁ / ‖μ_0‖₁ of the stream centring state against its warm-up mean. It is free: the state already exists.
+- **Receiver gate:** ON when drift > φ_on, OFF below 0.5·φ_on. OFF restores the source BN statistics.
+- **Methods:**
+  - `gated_continuous`: Phase 5 continuous AdaBN, only while the gate is ON;
+  - `balanced`: continuous AdaBN on a per-vote-class FIFO buffer (Bc per class; updates only when ≥ D classes are half full), always on;
+  - `gated_balanced`: the balanced update, only while ON, from a buffer cleared at ON.
+- **Oracle** (diagnostic): `gated_continuous` with the gate forced ON exactly at the change point.
+
+**Selected** (`hparams.json`; harm-aware objective J = dev vote F1 − positive prefix loss; `dev_tuning.csv`)
+- `gated_continuous`: φ_on = 0.7, m = 0.1. The dev prefix never opens the gate (clean-prefix drift ≤ ≈ 0.49).
+- `balanced`: Bc = 200, D = 5, m = 0.01.
+- `gated_balanced`: φ_on = 0.7. No dev setting ever updated, so it was a tie.
+
+**Comparison with the frozen Phase 5 rows** (`gated_e3.csv`; target-segment vote macro-F1; Δ vs source-only in pp with 95% CI; prefix Δ in brackets)
+
+| target | source | P5 continuous | P5 triggered | gated continuous | balanced | oracle gate |
+|---|---|---|---|---|---|---|
+| BLUE | 0.761 | −7.2 (−9.4) | −0.9 (0.0) | 0.0 (0.0) | +0.9 [0.3, 1.5] (+0.7) | −6.2 |
+| WIFI | 0.737 | −11.3 (−8.6) | −2.3 (0.0) | 0.0 (0.0) | +0.6 [0.1, 1.2] (+0.8) | −10.1 |
+| BOTH | 0.657 | −8.7 (−8.1) | −0.0 (0.0) | 0.0 (0.0) | +0.4 [−0.2, 1.1] (+0.6) | −7.8 |
+| awgn 2 | 0.739 | −3.3 (−8.4) | −0.0 (0.0) | 0.0 (0.0) | +1.3 [0.5, 2.2] (+0.4) | +2.1 |
+| awgn 3 | 0.588 | +8.5 (−9.1) | −0.3 (0.0) | 0.0 (0.0) | +2.8 [1.3, 4.4] (+0.7) | **+12.1** |
+| gain 3 | 0.104 | +19.9 (−7.4) | +4.4 (0.0) | **+19.4 [14.6, 24.3] (0.0)** | +0.6 [−1.5, 2.4] (+0.7) | +20.0 |
+| agc 3 | 0.795 | −8.3 (−8.5) | −0.5 (−0.2) | 0.0 (0.0) | −0.0 [−0.9, 0.8] (+0.3) | −4.2 |
+| adc 3 | 0.781 | −6.0 (−8.0) | −0.0 (0.0) | 0.0 (0.0) | +1.6 [0.6, 2.6] (+0.4) | −2.2 |
+| tilt 4 | 0.413 | +19.2 (−10.8) | +2.4 (0.0) | +2.7 [0.0, 6.8] (0.0) | +2.0 [0.9, 3.0] (+0.3) | **+22.2** |
+
+- `gated_balanced` never updated on any target, so it equals source-only everywhere: after the gate opens, the votes never cover D = 5 classes.
+- The oracle's prefix equals source by construction.
+
+**Gate** (`gate.csv`; `gated_continuous`)
+- The gate never opens in any clean prefix (0% of windows).
+- **gain 3:** opens on 25/25 streams, 97% of target windows ON, median delay 60 windows (≈ 0.1 s at the cached spacing).
+- **tilt 4:** opens on 3/25 streams (12%), median delay 967 windows.
+- No other target moves the floor past φ_on.
+
+**Cost** (`cost.csv`; per active window)
+
+| method | forward passes | backward | updates per stream | gate ON |
+|---|---|---|---|---|
+| gated continuous | 1.03 | 0 | 5.7 | 4.6% |
+| balanced | 5.73 | 0 | 155 | always |
+| gated balanced | 1.00 | 0 | 0 | 4.6% |
+| oracle | 1.44 | 0 | 100 | 51% |
+
+Compare `phase5/cost_ledger.csv`: continuous AdaBN costs 1.91 forward passes per window.
+
+**Reading**
+- **The noise-floor gate turns the gain-step trade-off into a free gain.** Gated continuous AdaBN keeps continuous AdaBN's +19.4 pp on gain 3 (the oracle reaches +20.0), with zero prefix harm and zero change on every other target, at 1.03 forward passes per window.
+- **Even a perfect "change happened" gate is not enough.** The oracle still loses 2–10 pp on interference, agc 3 and adc 3. Adaptation should switch on only for shifts it can fix (gain, tilt, strong AWGN), not for every change. A floor-magnitude gate does that selectively, but it misses AWGN (oracle +12.1 on awgn 3) and most tilt (+22.2) because those barely move the noise mean.
+- **The balanced buffer removes the harm but most of the gain too.** Always-on balanced adaptation is harm-free (prefix +0.3 to +0.8) but gains only 0–3 pp, at 5.7× the forward cost.
+
+**Limitations**
+- **Post hoc** (disclosed above).
+- **The drift reference is the stream's first warm-up,** so a deployment that starts impaired would see that floor as normal.
+- **Floor drift is bimodal on clean data** (two receiver groups at ≈ 0.04 and 0.4–0.56): φ_on must sit above the between-receiver spread of the deployment.
+- **The tilt detection rate is low** (12%).
+- **No single-drone or E5-lite runs** for the new methods.
+
+**Why there is no deterministic gain-correction baseline.** A reviewer may ask whether rescaling by the floor drift would match gated AdaBN on gain 3. It can't, for two reasons:
+- **A constant gain offset is already invisible.** The features are unit-power per window, and the `impairments` and `wavelets` self-checks verify this.
+- **Only the in-window step is left,** at a random position in each window. The only deterministic correction available, stream noise-mean centring, is already part of every row, source-only included.
+
+So the +19.4 pp is over the best deterministic correction the pipeline has. Division by the noise std was rejected in Phase 4 because it inflates features under gain steps.
