@@ -39,9 +39,12 @@ See proposal.md (Why, including both spikes). Building blocks that exist today:
 ### D2. Vote: sliding majority over the last W per-window predictions
 Kept in a ring buffer. Ties go to the most recent of the tied classes.
 
-### D3. Gate: sliding quantile threshold
-- The threshold is the (1 − q) quantile of energy over the last N = 2,000 *gated* windows, initialised from calibration.
+### D3. Gate: anchored quantile threshold
+- The threshold is the (1 − q) quantile of the calibration energies. After each refresh event, it is re-anchored on the energies of **all** active windows (accepted or not) of the next R chunks, at the same time as the trigger reference (D4). Until then the previous threshold stays in force.
+- Methods that update every chunk (continuous, TENT, naive PL) have no refresh events and keep the calibration threshold.
 - **Calibration:** the source model's energies on its own CLEAN validation rows (centred, session estimator). Labels aren't used, only the energies of known-good data.
+
+**Rejected (2026-10-26): a sliding quantile over the last N *accepted* windows** (the original D3). Accepted energies lie below the threshold, so it ratchets down: on a stationary toy stream (q = 0.1, N = 2,000), rejection went 0.18 → 0.70 → 0.84 over 200 chunks. **Alternative for later:** a sliding quantile over all windows. It is stable on stationary streams, but it absorbs any unknown block longer than N, which is how E5-lite presents the held-out class.
 
 ### D4. Trigger: chunk-mean energy against a reference
 - Before the first refresh, the reference is (μ, σ) of chunk means over the calibration set, chunked the same way.

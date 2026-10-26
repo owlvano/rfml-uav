@@ -29,11 +29,15 @@ For every active window, the runner SHALL report a vote decision: the majority c
 - **THEN** the vote decision is that class
 
 ### Requirement: Open-set energy gate
-The gate SHALL flag a window as unknown when its energy score (−logsumexp of the logits) exceeds the (1 − q) quantile of the energy scores of the last N gated windows. Flagged windows SHALL be excluded from refresh buffers and pseudo-labels, and reported as unidentified.
+The gate SHALL flag a window as unknown when its energy score (−logsumexp of the logits) exceeds the threshold. The threshold is the (1 − q) quantile of the source calibration energies until the first refresh event. After each refresh event it is the (1 − q) quantile of the energies of all active windows in the R chunks that follow, and the previous threshold applies until those R chunks have passed. Flagged windows SHALL be excluded from refresh buffers and pseudo-labels, and reported as unidentified.
 
 #### Scenario: Gate excludes from updates
 - **WHEN** a window is flagged unknown
 - **THEN** it is in no refresh buffer and no pseudo-label set
+
+#### Scenario: Stationary stream
+- **WHEN** a stream's energies follow the calibration distribution and no refresh occurs
+- **THEN** the rejected fraction of windows stays near q and does not grow over the stream
 
 #### Scenario: Gate output reported
 - **WHEN** a stream is processed

@@ -109,13 +109,59 @@ See README "Phase 4".
   - unknown drones (the gate).
 - **Story reframe (to do in the planning doc):** lead with 3.2 (cheap, large effect). OG-TCST becomes "what event-triggered updates add on top, at what energy cost". Confirm the RQ numbering.
 
+## Phase 5 outcome (2026-10-26)
+
+See README "Phase 5". These are frozen-protocol numbers (dev tuning saved before any target ran). By author decision on 2026-10-26 they are reported as they are; the fixes below go to a follow-up change, disclosed as post hoc.
+
+**Which rungs earn their cost**
+- **Rung 2, the vote, is the second free win after centring.**
+  - +3 to +11 pp on 8 of 9 targets (all p ≤ 3e-4), with no gradients and 24 stored predictions.
+  - It fails only where errors are consistent in time (gain 3, −1.8).
+- **Rung 3a, the triggered refresh, is safe but inert under the frozen settings.**
+  - θ = 4 detects the shift in 0–52% of streams; the gains are only gain 3 +4.4 and tilt 4 +2.4.
+  - Prefix harm ≤ 0.3 pp and +0.2% MACs.
+- **Always-on statistics adaptation is a trade-off, not a free gain.**
+  - Continuous AdaBN = TENT = PL: about +20 pp on gain 3 / tilt 4 and +8.5 on awgn 3.
+  - But −7 to −11 pp on the clean prefix, interference and mild shift B.
+- **Continuous AdaBN (+30% MACs, 0 backward) matches TENT (+90%).** The backward pass buys nothing.
+- **Periodic refresh is the worst method** (−14 to −25 pp). In a stream that shows one drone at a time, a 1,000-window buffer holds 2–3 drones. Vote errors fake diversity, so the D-class guard doesn't stop full refreshes.
+
+**Is 3b worth its backward passes?** No.
+- Vote-PL at the tuned lr = 1e-5 is within 0.4 pp of the triggered refresh, except gain 3 (+1.6 pp, from a 0.148 base). Head-only equals vote-PL.
+- Self-training adds nothing measurable in streams.
+
+**RQ3 answer.** Event-triggered, label-free adaptation adds little on top of centring + vote at the frozen settings. The large gains on severe receiver shift exist (always-on BN statistics), but they cost ~9 pp wherever the receiver is fine. The open problem is **when** to adapt, not how.
+
+**RQ4 answer.** No.
+- The energy gate does not separate unknown drones: AUROC 0.64 on CLEAN, 0.55 on BOTH, below chance for 3 of 7 classes under interference. 79–83% of unknown windows are accepted.
+- Its known-F1 gain (+2.6 / +2.9 pp) is a selection effect.
+
+**Alternatives deferred to later iterations**
+
+From the proposal:
+- EMA teacher, class balancing, BN + head self-training.
+- EATA / SAR / SHOT.
+- Adapting shift-B targets on impaired training recordings.
+- Online noise labels via the paper-2 cascade.
+- Cross-condition streams.
+- Per-class statistics.
+- The method name.
+
+New from Phase 5:
+- **Drone-balanced buffer** (a reservoir per vote class) for the refresh: the direct fix for the periodic collapse.
+- **Harm-aware dev selection:** choose on target vote F1 minus prefix harm. Stage 4 picked m = 0.1 despite −10 pp dev prefix harm.
+- **Trigger tuned for detection rate** (with severe dev shifts, or a detection-rate target), or a vote-disagreement / noise-floor trigger (rung 1's μ already moves on receiver change: a cheaper, label-free drift signal).
+- **Continuous AdaBN gated by that trigger:** on only after a detected receiver change, back to source on recovery.
+- **A better open-set score** (Mahalanobis on penultimate features, or an energy score after temperature scaling), with gate thresholds per receiver condition.
+
 ## Next session
 
-1. Archive `receiver-normalised-source`, merge, push. Back up `data/drone-rf/results` and `checkpoints` (gitignored).
-2. Reframe the plan and RQs around 3.2-first (see Phase 4 outcome).
-3. OG-TCST (lean) on the centred source: stream harness (centring stream estimator + time-ordered windows), energy gate, temporal-vote pseudo-labels, head-only updates. Baselines re-run in the stream with the same voting. E5-lite once the gate exists.
-4. **Hardware (none yet, 2026-10-19).**
-   - Order an RPi 5 and a USB-C power meter with logging (or an INA226) this week. This is the main E9 platform.
+1. Review Phase 5. Archive `stream-statistics-adaptation`, commit, merge, push. Back up `data/drone-rf/results` and `checkpoints` (gitignored, now incl. `checkpoints/paper3/loco/`).
+2. **Story:** lead with rungs 1 + 2 (centring + vote, both free). Present adaptation as a costed trade-off with an honest "when to adapt" gap. Decide whether the follow-up (noise-floor trigger + gated continuous AdaBN + balanced buffer) fits before 2027-01-20.
+3. **E9** on the ledger: WPD 3.91 M + CNN 1.87 M MACs/window. Feature extraction dominates (68%), which matters for the energy story.
+4. Light ablations (W, θ, update scope) on dev cells only.
+5. **Hardware (none yet, 2026-10-19).**
+   - Order an RPi 5 and a USB-C power meter with logging (or an INA226). This is the main E9 platform.
    - CloudJetson (AGX Orin 64GB, ~$1.70/h) is a secondary data point, if they confirm `tegrastats` per-rail power and sudo for `nvpmodel` / `jetson_clocks`. Report it as AGX Orin, not as an Orin Nano proxy.
-   - Hardware-independent numbers in any case: MACs per segment, parameters updated per event, update rate.
    - Go/no-go Nov 15.
+6. Writing: Methods 3.2/3.3 as the ladder; Results RQ1–RQ4.

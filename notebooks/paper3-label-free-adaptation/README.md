@@ -312,3 +312,116 @@ On the centred source, adaptation finally has a job: it recovers 41–70% of the
 - The shortcut is weakened, not removed (receiver-group accuracy 0.907).
 - Centring fails under strong spectral tilt and under gain steps that hit the noise windows themselves.
 - The adoption rule was amended post hoc (disclosed above).
+
+## Phase 5 — Stream adaptation (RQ3) and open-set gate (RQ4)
+
+Notebooks: `7_Stream_Adaptation.ipynb` (streaming E3, trigger, single-drone check, cost ledger) and `8_Open_Set_Gate.ipynb` (E5-lite). Results in `results/paper3/phase5/`. Runner: `rfml_uav.adapt.stream.run_stream`.
+
+**The ladder and its protocol**
+
+| rung | mechanism | gradients |
+|---|---|---|
+| 1 | centring on the receiver-noise mean (Phase 4) | none |
+| 2 | temporal vote, majority over the last W windows | none |
+| 3a | event-triggered, guarded BN-statistics refresh | none |
+| 3b | vote-pseudo-label fine-tune on a trigger (variant) | backward |
+| 4 | open-set energy gate | none |
+
+- **Streams.** One per (receiver condition, model):
+  - a clean prefix: the model's CLEAN test recordings;
+  - then the target segment: the target's E3 test-half recordings, chained in a fixed random order.
+  - Windows are time-ordered within each recording. Centring uses the stream estimator (β = 0.01, k = 50) over the whole stream.
+- **Runner.** Chunks of M = 250 active windows. Per chunk: predict, gate, vote, buffer, trigger, adapt, so every prediction precedes the update it feeds. No mechanism reads labels.
+- **Gate.** The threshold is the (1 − q) quantile of calibration energies (the model's CLEAN validation rows), re-anchored after each refresh.
+  - The original sliding quantile over accepted windows ratchets down: rejection went 0.18 → 0.84 on a stationary toy stream. It was replaced before any run (design D3).
+- **Trigger.** Chunk-mean energy moves by more than θσ from the reference; cooldown C = 8 chunks.
+- **Guarded refresh.**
+  - Full (every BN layer) if the buffer's votes cover ≥ D classes.
+  - Otherwise restricted: conv BN layers only, (1 − λ)·source + λ·buffer.
+- **Comparison methods,** all on the same vote and gate: continuous AdaBN, periodic refresh, online TENT, online naive PL, vote-PL, head-only vote-PL.
+- **Data.** 9 targets × 25 centred models = 225 streams.
+
+**Selected hyperparameters** (`stream_hparams.json`, staged dev tuning on awgn_1 / gain_2 / adc_2 / tilt_3 with seed-0 models; `dev_tuning.csv`)
+- W = 25 (≈ 50 ms of cached windows), q = 0.1, θ = 4, B = 1,000, D = 3, λ = 0.3.
+- Continuous AdaBN: m = 0.1. Periodic: P = 20. TENT: lr = 1e-3. PL: lr = 1e-5, τ = 0.8 (Phase 3). Vote-PL: lr = 1e-5, ρ = 0.8.
+- On the mild dev cells the trigger seldom fires, and more firing scored worse (θ = 2: 0.49 vs θ = 4: 0.63 dev vote F1). The insensitive θ = 4 won.
+
+**Rung 2: the vote alone** (`vote_gain.csv`; source-only, target segment, vote − per-window macro-F1, pp)
+
+| BLUE | WIFI | BOTH | awgn 2 | awgn 3 | gain 3 | agc 3 | adc 3 | tilt 4 |
+|---|---|---|---|---|---|---|---|---|
+| +9.9 | +7.7 | +10.8 | +7.8 | +6.3 | −1.8 | +4.9 | +6.7 | +3.0 |
+
+- Every gain is significant (p ≤ 3e-4).
+- No gradients; memory is the last 24 predictions.
+- gain 3 is the exception: there the per-window errors are consistent, so voting cannot fix them.
+
+**Streaming E3** (`stream_e3.csv`; target-segment vote macro-F1, mean over 25 runs; Δ vs source-only in pp, paired)
+
+| target | source | triggered (3a) | continuous AdaBN | periodic | TENT | PL | vote-PL (3b) |
+|---|---|---|---|---|---|---|---|
+| BLUE | **0.761** | −0.9 | −7.3 | −21.7 | −7.2 | −7.3 | −0.8 |
+| WIFI | **0.737** | −2.3 | −11.3 | −22.7 | −11.2 | −11.3 | −1.9 |
+| BOTH | **0.657** | −0.0 | −8.7 | −18.6 | −8.5 | −8.6 | −0.1 |
+| awgn 2 | **0.739** | −0.0 | −3.3 | −24.7 | −3.2 | −3.3 | −0.2 |
+| awgn 3 | 0.588 | −0.3 | **+8.5** | −11.6 | +8.5 | +8.2 | −0.3 |
+| gain 3 | 0.104 | +4.4 | +19.9 | +6.8 | **+20.0** | +20.0 | +6.0 |
+| agc 3 | **0.795** | −0.5 | −8.3 | −19.4 | −7.9 | −8.3 | −0.5 |
+| adc 3 | **0.781** | −0.0 | −6.0 | −23.7 | −5.8 | −6.3 | −0.0 |
+| tilt 4 | 0.413 | +2.4 | +19.2 | +0.9 | **+19.5** | +18.9 | +2.2 |
+
+- Bold = the best method per target.
+- The head-only ablation equals vote-PL to within 0.01 pp on every target.
+- Paired tests against the best method and against source-only are in the CSV.
+
+**Harm on the clean prefix** (`stream_e3_harm.csv`; prefix vote F1 vs source-only, source ≈ 0.84–0.85)
+- Triggered and vote-PL: within 0.3 pp (agc 3: −0.2).
+- Continuous AdaBN, TENT and PL: **−7.4 to −11.0 pp** on every stream.
+- Periodic: **−14.1 to −18.4 pp**.
+
+**Trigger quality** (`trigger.csv`; triggered method; vote-PL is identical)
+- **False triggers in the clean prefix:** 0.04 per stream (1 of 25 streams per target).
+- **Detection rate** (streams with an event after the change point): gain 3 52%, tilt 4 20%, WIFI 16%, BLUE 4%, awgn 3 4%, and 0% on BOTH, awgn 2, agc 3 and adc 3.
+- **Median delay:** gain 3 2,296 windows (≈ 4.6 s at the cached-window spacing); tilt 4 1,478 (≈ 3.0 s).
+
+**Single-drone check** (`single_drone.csv`; per-recording streams, clean then impaired)
+- Vote accuracy is within 0.2 pp of source-only on every shift-B target. At most 0.7% of streams lose more than 5 pp.
+- Refreshes ran only on gain 3 (60, 43% restricted) and tilt 4 (30, 73% restricted).
+- **The guard holds, but mostly because the trigger rarely fires.**
+- The periodic method shows what happens without that protection:
+  - its 1,000-window buffers hold 2–3 drones (seed-0 dev diagnosis);
+  - vote errors make them look more diverse than they are, so the D-class guard lets full refreshes through, and accuracy collapses.
+
+**E5-lite** (`e5_lite.csv`; 35 LOCO models, seed 0; source-only, means over held-out classes)
+
+| condition | energy AUROC (unknown vs known) | unknown false-accept | known rejection | known vote F1, gate on / off |
+|---|---|---|---|---|
+| CLEAN | 0.636 | 0.833 | 0.114 | 0.866 / 0.840 |
+| BOTH | 0.547 | 0.789 | 0.204 | 0.729 / 0.700 |
+
+- Per held-out class, AUROC ranges over 0.52–0.75 (CLEAN) and 0.40–0.68 (BOTH, below chance for AIR, MIN and PHA).
+- The gain with the gate on is a selection effect: the gate drops uncertain known windows. It does not reject unknowns.
+- With the triggered refresh the numbers are the same, except where it fires (AIR / INS CLEAN, −6.9 / −4.7 pp known vote F1 with the gate on).
+
+**Cost ledger** (`cost_ledger.csv`; hardware-independent, per active window)
+- Feature extraction: WPD 3.91 M MACs. CNN forward: 1.87 M MACs.
+- Total per window, with backward estimated at 2 × forward:
+
+| method | total MACs | fwd passes | bwd passes | events per stream | changed per event |
+|---|---|---|---|---|---|
+| source | 5.78 M | 1.00 | 0 | 0 | — |
+| triggered | 5.80 M (+0.2%) | 1.01 | 0 | 0.25 | 2,016 BN statistics |
+| periodic | 6.14 M (+6%) | 1.19 | 0 | 8.3 | 2,016 statistics |
+| continuous AdaBN | 7.50 M (+30%) | 1.91 | 0 | 175 | 2,016 statistics |
+| TENT | 11.0 M (+90%) | 1.93 | 0.93 | 175 | 2,016 affine parameters |
+| PL | 10.5 M (+82%) | 1.84 | 0.84 | 175 | 409,626 parameters (all) |
+| vote-PL | 5.82 M (+0.6%) | 1.01 | 0.004 | 0.26 | all parameters + statistics |
+
+The ladder figure is `ladder.png`.
+
+**Limitations**
+- **Cached-window spacing.** Windows are about 2 ms apart, so W and the delays in windows are coarser than real time.
+- **Energy trigger.** Calibrated on chunk means that vary between drones, it is too insensitive for mild shifts. Drone changes inside a condition also move it.
+- **E5-lite is seed 0 only** (35 models); variation is over folds and classes.
+- **Noise/active labels are offline,** as in Phase 4.
+- **Frozen-protocol result.** These numbers come from the pre-registered dev tuning. Fixes suggested by the results (see NOTES "Phase 5 outcome") need a new change and are disclosed as post hoc.

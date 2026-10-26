@@ -112,6 +112,12 @@ nested archive structure into `raw/`.
 - **`adapt/baselines.py`** — label-free adaptation baselines `adabn`, `tent`, `pseudo_label`:
   `(model, X, **hp) -> (adapted copy, info)`; no label argument, source untouched, `info` = forward/backward
   passes per window + updated-param count (E3; reused by the OG-TCST stream harness).
+- **`adapt/stream.py`** — `run_stream(model, X, active, method, hp, calib, seed)`: the chunked prequential
+  stream runner (thesis 3.3; no label argument). Per chunk: predict → energy gate (calibration quantile,
+  re-anchored after refreshes) → sliding vote over W → buffer → energy drift trigger → adapt. Methods in `METHODS`:
+  `source`, `triggered` (guarded BN refresh: full if buffer votes cover ≥ D classes, else conv-BN λ-blend),
+  `continuous`, `periodic`, `tent`, `pl`, `vote_pl`, `vote_pl_head`. Returns pred/vote/energy/known + `cost`
+  (window-passes, events, refreshes, changed counts). Self-check: `python -m rfml_uav.adapt.stream`.
 - **`eval/splits.py`** — `make_splits(y, groups, mode)`: K outer test folds + val carved from train;
   `mode="recording"` groups by `f"{bui}_{n}"` (leakage-free), `mode="chunk"` is the legacy paper-1 split.
   `undersample(idx, y, seed)`: the paper-3 class balancing (every class down to the smallest).
